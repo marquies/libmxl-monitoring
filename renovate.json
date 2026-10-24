@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "minimumReleaseAge": "3 days",
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "description": "go-mxl builder bumps land as deps commits; MXL_REF in ci.yml moves with them",
+      "matchPackageNames": ["ghcr.io/qvest-digital/go-mxl-builder"],
+      "semanticCommitType": "deps"
+    }
+  ]
+}
