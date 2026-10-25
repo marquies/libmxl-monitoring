@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/marquies/libmxl-monitoring/compare/v0.1.0...v0.2.0) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* mxlMonitoringFlowSnapshot and mxlMonitoringEvent carry the flow id in MXL_MONITORING_ID bytes, the snapshot gains the target, and MXL_MONITORING_ACCESS_DISCONNECTED precedes MXL_MONITORING_ACCESS_COUNT.
+
+### Features
+
+* report a flow handle under a name of its own ([#3](https://github.com/marquies/libmxl-monitoring/issues/3)) ([87d843f](https://github.com/marquies/libmxl-monitoring/commit/87d843fb4db26a639e05b7fda5fe17e092020de0))
+
 ## 0.1.0 (2026-10-24)
 
 
