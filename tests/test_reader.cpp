@@ -192,7 +192,7 @@ TEST_CASE("A flow not in the domain is not found", "[reader]")
     auto const s = reader.snapshot();
     CHECK(s.access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND);
     CHECK(s.accessFailures[MXL_MONITORING_ACCESS_FLOW_NOT_FOUND] == 1);
-    CHECK(std::string{s.lastErrorDetail} == "flow not found in the domain");
+    CHECK(std::string{s.lastErrorDetail} == std::string{"flow "} + VideoId + " not found in the domain");
 }
 
 TEST_CASE("Opening a flow reads what it is", "[reader]")
@@ -330,4 +330,36 @@ TEST_CASE("Samples read count in samples", "[reader]")
     auto const s = reader.snapshot();
     CHECK(s.unit == MXL_MONITORING_UNIT_SAMPLE);
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 480);
+}
+
+TEST_CASE("A slot reported under its own name opens the flow it is pointed at", "[reader]")
+{
+    auto domain = Domain{};
+    domain.createWriter(videoDefinition(VideoId));
+    auto monitoring = mxlMonitoring{};
+    REQUIRE(mxlMonitoringCreate(nullptr, &monitoring) == MXL_STATUS_OK);
+    auto flow = mxlMonitoringFlow{};
+    REQUIRE(mxlMonitoringAddFlow(monitoring, "camera-1", MXL_MONITORING_ROLE_READER, &flow) == MXL_STATUS_OK);
+    auto const instance = mxlMonitoringCreateInstance(flow, domain.path.c_str(), "");
+    REQUIRE(instance != nullptr);
+    auto reader = mxlFlowReader{};
+
+    INFO("pointed at nothing, there is nothing to open");
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, "") == MXL_STATUS_OK);
+    CHECK(mxlMonitoringGetFlowAccess(flow) == MXL_MONITORING_ACCESS_DISCONNECTED);
+    CHECK(mxlMonitoringCreateFlowReader(flow, instance, "", &reader) == MXL_ERR_INVALID_ARG);
+
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, VideoId) == MXL_STATUS_OK);
+    REQUIRE(mxlMonitoringCreateFlowReader(flow, instance, "", &reader) == MXL_STATUS_OK);
+    auto s = mxlMonitoringFlowSnapshot{};
+    auto count = std::size_t{1};
+    REQUIRE(mxlMonitoringSnapshot(monitoring, &s, &count) == MXL_STATUS_OK);
+    CHECK(std::string{s.flowId} == "camera-1");
+    CHECK(std::string{s.target} == VideoId);
+    CHECK(s.access == MXL_MONITORING_ACCESS_OPEN);
+    CHECK(std::string{s.mediaType} == "video/v210");
+
+    mxlReleaseFlowReader(instance, reader);
+    mxlDestroyInstance(instance);
+    mxlMonitoringDestroy(monitoring);
 }

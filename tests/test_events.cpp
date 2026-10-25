@@ -199,3 +199,51 @@ TEST_CASE("Writer conditions are write conditions", "[events]")
     CHECK(context.events[1].write == MXL_MONITORING_WRITE_INVALID_INPUT);
     CHECK(context.events[1].content == MXL_MONITORING_CONTENT_WRONG_SIZE);
 }
+
+TEST_CASE("Disconnecting ends an access condition and silences a flow without data", "[events]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, 3, 1);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_FLOW_NOT_FOUND, MXL_ERR_FLOW_NOT_FOUND);
+    mxlMonitoringPoll(context.monitoring);
+    REQUIRE(context.events.size() == 2);
+
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, "") == MXL_STATUS_OK);
+    mxlMonitoringPoll(context.monitoring);
+    REQUIRE(context.events.size() == 3);
+    CHECK(context.events[2].kind == MXL_MONITORING_CONDITION_ACCESS);
+    CHECK(context.events[2].phase == MXL_MONITORING_PHASE_RECOVERED);
+
+    INFO("a slot disconnected on purpose delivering nothing is not a fault");
+    context.now += 120 * Second;
+    mxlMonitoringPoll(context.monitoring);
+    CHECK(context.events.size() == 3);
+}
+
+TEST_CASE("A caller recording by hand describes its own conditions", "[events]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_CONTENT,
+                MXL_MONITORING_CONTENT_ILLEGAL_VALUES, "v210 code 0 at row 1") == MXL_STATUS_OK);
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_ERROR, MXL_MONITORING_CONTENT_COUNT,
+                "read failed: status 8") == MXL_STATUS_OK);
+    CHECK(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_CONTENT, MXL_MONITORING_CONTENT_COUNT, "x") ==
+          MXL_ERR_INVALID_ARG);
+    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_ILLEGAL_VALUES, 1, 1);
+    mxlMonitoringRecordRead(flow, MXL_ERR_INVALID_ARG, 2, 1);
+    mxlMonitoringPoll(context.monitoring);
+    REQUIRE(context.events.size() == 2);
+    for (auto const& event : context.events)
+    {
+        if (event.read == MXL_MONITORING_READ_ERROR)
+        {
+            CHECK(std::string{event.detail} == "read failed: status 8");
+        }
+        else
+        {
+            CHECK(std::string{event.detail} == "v210 code 0 at row 1");
+        }
+    }
+}

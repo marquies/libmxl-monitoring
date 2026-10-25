@@ -37,24 +37,6 @@ namespace
         return role == MXL_MONITORING_ROLE_READER || role == MXL_MONITORING_ROLE_REPLICATION_SOURCE;
     }
 
-    // The words mxl-reader has used for where a flow stands. A flow whose data
-    // was replaced counts as not found: its reader is waiting for it again.
-    char const* stateName(mxlMonitoringAccess access)
-    {
-        switch (access)
-        {
-            case MXL_MONITORING_ACCESS_STARTING:           return "starting";
-            case MXL_MONITORING_ACCESS_OPEN:               return "open";
-            case MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE: return "domain_unavailable";
-            case MXL_MONITORING_ACCESS_FLOW_NOT_FOUND:
-            case MXL_MONITORING_ACCESS_FLOW_INVALID:       return "flow_not_found";
-            case MXL_MONITORING_ACCESS_PERMISSION_DENIED:  return "permission_denied";
-            case MXL_MONITORING_ACCESS_OTHER:
-            case MXL_MONITORING_ACCESS_COUNT:              return "flow_error";
-        }
-        return "unknown";
-    }
-
     struct Key
     {
         char const* key;
@@ -143,7 +125,7 @@ namespace
         {
             info();
             family("flow_state", _reads ? "1 for the state the flow's reader is in." : "1 for the state the flow's writer is in.", "gauge",
-                [&](auto const& s) { line(std::format("{}_flow_state{{flow=\"{}\",state=\"{}\"}} 1", _p, id(s), stateName(s.access))); });
+                [&](auto const& s) { line(std::format("{}_flow_state{{flow=\"{}\",state=\"{}\"}} 1", _p, id(s), mxlMonitoringAccessName(s.access))); });
             family("flow_delivering", _reads ? "1 while reads land within a second." : "1 while commits land within a second.", "gauge",
                 [&](auto const& s) { line(std::format("{}_flow_delivering{{flow=\"{}\"}} {}", _p, id(s), s.delivering ? 1 : 0)); });
             if (_reads)
@@ -217,7 +199,7 @@ namespace
             family("flow_info", "Media type and unit of a flow, once it has been opened.", "gauge",
                 [&](auto const& s)
                 {
-                    if (s.opens > 0)
+                    if (s.opens > 0 && s.mediaType[0] != '\0')
                     {
                         line(std::format("{}_flow_info{{flow=\"{}\",media_type=\"{}\",unit=\"{}\"}} 1", _p, id(s), labelValue(s.mediaType),
                             s.unit == MXL_MONITORING_UNIT_SAMPLE ? "samples" : "grains"));

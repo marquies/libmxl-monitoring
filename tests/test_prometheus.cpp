@@ -171,3 +171,15 @@ TEST_CASE("A buffer too small is refused with the size it needs", "[prometheus]"
     CHECK(mxlMonitoringPrometheusRender(context.monitoring, buffer.data(), &small) == MXL_ERR_INVALID_ARG);
     CHECK(small == size);
 }
+
+TEST_CASE("A slot shows its name, a disconnected state, and no info without a media type", "[prometheus]")
+{
+    auto context = Context{};
+    auto const flow = context.open(MXL_MONITORING_ROLE_READER, "camera-1");
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, "") == MXL_STATUS_OK);
+    auto const text = render(context.monitoring);
+    CHECK(contains(text, "mxl_reader_flow_state{flow=\"camera-1\",state=\"disconnected\"} 1"));
+    INFO("opened before, but nothing is known of a flow now");
+    CHECK(text.find("mxl_reader_flow_info{") == std::string::npos);
+    CHECK(contains(text, "mxl_reader_opens_total{flow=\"camera-1\"} 1"));
+}

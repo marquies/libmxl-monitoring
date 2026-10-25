@@ -55,8 +55,16 @@ extern "C"
         // The flow's data was replaced, typically by a writer that restarted.
         MXL_MONITORING_ACCESS_FLOW_INVALID,
         MXL_MONITORING_ACCESS_OTHER,
+        // No flow to read or write: the handle's target was cleared on
+        // purpose, e.g. by an NMOS controller disconnecting a receiver.
+        MXL_MONITORING_ACCESS_DISCONNECTED,
         MXL_MONITORING_ACCESS_COUNT,
     } mxlMonitoringAccess;
+
+    // One word per access state, as mxl-reader has named them: starting,
+    // open, domain_unavailable, flow_not_found (also for a flow whose data
+    // was replaced), permission_denied, flow_error, disconnected.
+    char const* mxlMonitoringAccessName(mxlMonitoringAccess access);
 
     typedef enum mxlMonitoringRead
     {
@@ -137,12 +145,26 @@ extern "C"
     // Frees every flow with it; their handles are invalid afterwards.
     mxlStatus mxlMonitoringDestroy(mxlMonitoring monitoring);
 
+#define MXL_MONITORING_ID 256
+
     // A flow is known by its id before it is opened, so a failure to reach it
-    // has a flow to belong to.
+    // has a flow to belong to. The id is what the flow is reported as, up to
+    // MXL_MONITORING_ID - 1 characters; it is also the libmxl flow it opens
+    // unless mxlMonitoringSetFlowTarget names another.
     mxlStatus mxlMonitoringAddFlow(mxlMonitoring monitoring, char const* flowId, mxlMonitoringRole role, mxlMonitoringFlow* flow);
     // No record call may run on the flow during or after its removal. Its
     // active conditions end without an event.
     mxlStatus mxlMonitoringRemoveFlow(mxlMonitoring monitoring, mxlMonitoringFlow flow);
+
+    // Points the handle at another libmxl flow, for a reader slot that is
+    // reported under its own name whichever flow it is connected to. NULL or
+    // "" disconnects it. A change keeps every count and forgets what was
+    // known of the flow before: its format, definition, last data, age and
+    // last error. Call from the thread recording for the flow, between reads.
+    mxlStatus mxlMonitoringSetFlowTarget(mxlMonitoringFlow flow, char const* flowId);
+
+    // Where the flow stands now, without taking a snapshot.
+    mxlMonitoringAccess mxlMonitoringGetFlowAccess(mxlMonitoringFlow flow);
 
     typedef struct mxlMonitoringFlowFormat_t
     {
@@ -236,7 +258,9 @@ extern "C"
         uint32_t version; // 1
         uint32_t size;    // sizeof(mxlMonitoringFlowSnapshot)
 
-        char flowId[37];
+        char flowId[MXL_MONITORING_ID];
+        // The libmxl flow the handle reads or writes; "" when disconnected.
+        char target[MXL_MONITORING_ID];
         mxlMonitoringRole role;
         mxlMonitoringUnit unit;
         mxlDataFormat format;
@@ -296,13 +320,23 @@ extern "C"
         MXL_MONITORING_CONDITION_WRITE,
     } mxlMonitoringConditionKind;
 
+    // What the events of one condition say, for a caller recording by hand:
+    // kind and outcome name the condition as in mxlMonitoringEvent (outcome
+    // an mxlMonitoringAccess, -Read or -Write value), content the issue for
+    // INVALID_CONTENT and INVALID_INPUT. The reader wrappers describe what
+    // they record themselves. Not for a hot path: it takes a lock and copies
+    // the text.
+    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
+        char const* detail);
+
     typedef enum mxlMonitoringPhase
     {
         MXL_MONITORING_PHASE_STARTED,    // first occurrence
         // Once per persistIntervalNs while it recurs, or while the flow it
-        // concerns delivers nothing.
+        // concerns delivers nothing and is not disconnected.
         MXL_MONITORING_PHASE_PERSISTING,
-        // Access: the flow is open again. Read and write: see recoverDelayNs.
+        // Access: the flow is open again, or disconnected on purpose. Read
+        // and write: see recoverDelayNs.
         MXL_MONITORING_PHASE_RECOVERED,
     } mxlMonitoringPhase;
 
@@ -312,7 +346,7 @@ extern "C"
         uint32_t size;    // sizeof(mxlMonitoringEvent)
 
         uint64_t timeNs;
-        char flowId[37];
+        char flowId[MXL_MONITORING_ID];
         mxlMonitoringRole role;
         mxlMonitoringConditionKind kind;
         mxlMonitoringPhase phase;
