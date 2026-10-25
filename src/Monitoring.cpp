@@ -154,6 +154,43 @@ namespace mxl::monitoring
         contentDetail[issue] = std::move(detail);
     }
 
+    void Flow::forget()
+    {
+        mediaType.clear();
+        lastErrorDetail.clear();
+        failureDetail.clear();
+        for (auto& d : accessDetail)
+        {
+            d.clear();
+        }
+        for (auto& d : contentDetail)
+        {
+            d.clear();
+        }
+        declared = mxlMonitoringDeclared{};
+        definitionSet = false;
+        recomputeMismatch();
+        unit.store(MXL_MONITORING_UNIT_UNKNOWN, Relaxed);
+        format.store(MXL_DATA_FORMAT_UNSPECIFIED, Relaxed);
+        rateNumerator.store(0, Relaxed);
+        rateDenominator.store(0, Relaxed);
+        lastErrorStatus.store(MXL_STATUS_OK, Relaxed);
+        lastErrorIndex.store(0, Relaxed);
+        lastErrorTimeNs.store(0, Relaxed);
+        lastIndex.store(0, Relaxed);
+        lastDataTimeNs.store(0, Relaxed);
+        ageNs.store(0, Relaxed);
+        lastProgressNs.store(0, Relaxed);
+        earlyCountedIndex.store(std::numeric_limits<std::uint64_t>::max(), Relaxed);
+        access.store(target.empty() ? MXL_MONITORING_ACCESS_DISCONNECTED : MXL_MONITORING_ACCESS_STARTING, Relaxed);
+    }
+
+    std::string Flow::targetId() const
+    {
+        auto const lock = std::lock_guard{mutex};
+        return target;
+    }
+
     bool isLoss(mxlStatus status) noexcept
     {
         switch (status)
@@ -312,7 +349,7 @@ extern "C"
             return MXL_ERR_INVALID_ARG;
         }
         auto const id = std::string_view{flowId};
-        if (id.empty() || id.size() > 36)
+        if (id.empty() || id.size() >= MXL_MONITORING_ID)
         {
             return MXL_ERR_INVALID_ARG;
         }
@@ -327,6 +364,7 @@ extern "C"
                 }
             }
             m->flows.push_back(std::make_unique<Flow>(*m, std::string{id}, role));
+            m->flows.back()->target = id;
             *flow = toHandle(m->flows.back().get());
             return MXL_STATUS_OK;
         }
@@ -352,6 +390,112 @@ extern "C"
         }
         m->flows.erase(it);
         return MXL_STATUS_OK;
+    }
+
+    mxlStatus mxlMonitoringSetFlowTarget(mxlMonitoringFlow flow, char const* flowId)
+    {
+        auto* const f = toFlow(flow);
+        auto const id = std::string_view{flowId != nullptr ? flowId : ""};
+        if (f == nullptr || id.size() >= MXL_MONITORING_ID)
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        try
+        {
+            auto const lock = std::lock_guard{f->mutex};
+            if (f->target != id)
+            {
+                f->target = id;
+                f->forget();
+            }
+            return MXL_STATUS_OK;
+        }
+        catch (...)
+        {
+            return MXL_ERR_UNKNOWN;
+        }
+    }
+
+    mxlStatus mxlMonitoringGetLastErrorDetail(mxlMonitoringFlow flow, char* buffer, size_t size)
+    {
+        auto* const f = toFlow(flow);
+        if (f == nullptr || buffer == nullptr || size == 0)
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        auto const lock = std::lock_guard{f->mutex};
+        copyText(f->lastErrorDetail, buffer, size);
+        return MXL_STATUS_OK;
+    }
+
+    mxlMonitoringAccess mxlMonitoringGetFlowAccess(mxlMonitoringFlow flow)
+    {
+        auto* const f = toFlow(flow);
+        return f != nullptr ? static_cast<mxlMonitoringAccess>(f->access.load(Relaxed)) : MXL_MONITORING_ACCESS_STARTING;
+    }
+
+    char const* mxlMonitoringAccessName(mxlMonitoringAccess access)
+    {
+        switch (access)
+        {
+            case MXL_MONITORING_ACCESS_STARTING:           return "starting";
+            case MXL_MONITORING_ACCESS_OPEN:               return "open";
+            case MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE: return "domain_unavailable";
+            case MXL_MONITORING_ACCESS_FLOW_NOT_FOUND:
+            case MXL_MONITORING_ACCESS_FLOW_INVALID:       return "flow_not_found";
+            case MXL_MONITORING_ACCESS_PERMISSION_DENIED:  return "permission_denied";
+            case MXL_MONITORING_ACCESS_OTHER:              return "flow_error";
+            case MXL_MONITORING_ACCESS_DISCONNECTED:       return "disconnected";
+            case MXL_MONITORING_ACCESS_COUNT:              break;
+        }
+        return "unknown";
+    }
+
+    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
+        char const* detail)
+    {
+        auto* const f = toFlow(flow);
+        if (f == nullptr || detail == nullptr)
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        try
+        {
+            switch (kind)
+            {
+                case MXL_MONITORING_CONDITION_ACCESS:
+                    if (!inRange(outcome, MXL_MONITORING_ACCESS_COUNT))
+                    {
+                        return MXL_ERR_INVALID_ARG;
+                    }
+                    f->describeAccess(static_cast<mxlMonitoringAccess>(outcome), detail);
+                    return MXL_STATUS_OK;
+                case MXL_MONITORING_CONDITION_READ:
+                case MXL_MONITORING_CONDITION_WRITE:
+                {
+                    auto const invalid = kind == MXL_MONITORING_CONDITION_READ ? outcome == MXL_MONITORING_READ_INVALID_CONTENT
+                                                                               : outcome == MXL_MONITORING_WRITE_INVALID_INPUT;
+                    if (invalid)
+                    {
+                        if (!inRange(static_cast<int>(content), MXL_MONITORING_CONTENT_COUNT))
+                        {
+                            return MXL_ERR_INVALID_ARG;
+                        }
+                        f->describeContent(content, detail);
+                    }
+                    else
+                    {
+                        f->describeFailure(detail);
+                    }
+                    return MXL_STATUS_OK;
+                }
+            }
+            return MXL_ERR_INVALID_ARG;
+        }
+        catch (...)
+        {
+            return MXL_ERR_UNKNOWN;
+        }
     }
 
     mxlStatus mxlMonitoringSetFlowFormat(mxlMonitoringFlow flow, mxlMonitoringFlowFormat const* format)
@@ -386,7 +530,7 @@ extern "C"
     void mxlMonitoringRecordAccess(mxlMonitoringFlow flow, mxlMonitoringAccess access, mxlStatus status)
     {
         auto* const f = toFlow(flow);
-        if (f == nullptr || !inRange(static_cast<int>(access), MXL_MONITORING_ACCESS_COUNT))
+        if (f == nullptr || !inRange(static_cast<int>(access), MXL_MONITORING_ACCESS_COUNT) || access == MXL_MONITORING_ACCESS_DISCONNECTED)
         {
             return;
         }
@@ -396,7 +540,6 @@ extern "C"
             add(f->opens, 1);
             f->lastProgressNs.store(now, Relaxed);
             f->earlyCountedIndex.store(std::numeric_limits<std::uint64_t>::max(), Relaxed);
-            f->stallCounted.store(false, Relaxed);
         }
         else if (access != MXL_MONITORING_ACCESS_STARTING)
         {
@@ -578,7 +721,7 @@ extern "C"
             auto const& f = *m->flows[i];
             auto& s = snapshots[i];
             s = mxlMonitoringFlowSnapshot{};
-            s.version = 1;
+            s.version = 2;
             s.size = sizeof(mxlMonitoringFlowSnapshot);
             copyText(f.id, s.flowId, sizeof(s.flowId));
             s.role = f.role;
@@ -618,6 +761,7 @@ extern "C"
             s.delivering = f.delivering(now);
             auto const flowLock = std::lock_guard{f.mutex};
             copyText(f.mediaType, s.mediaType, sizeof(s.mediaType));
+            copyText(f.target, s.target, sizeof(s.target));
             copyText(f.lastErrorDetail, s.lastErrorDetail, sizeof(s.lastErrorDetail));
             copyText(f.formatMismatch, s.formatMismatch, sizeof(s.formatMismatch));
         }

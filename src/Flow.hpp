@@ -104,6 +104,8 @@ namespace mxl::monitoring
         mutable std::mutex mutex;
         std::string mediaType;
         std::string domain;
+        // The libmxl flow the handle reads or writes; "" when disconnected.
+        std::string target;
         std::string lastErrorDetail;
         // What each condition's events say, so an event never carries the
         // text of another failure.
@@ -141,6 +143,10 @@ namespace mxl::monitoring
         void describeAccess(mxlMonitoringAccess access, std::string detail);
         void describeFailure(std::string detail);
         void describeContent(mxlMonitoringContent issue, std::string detail);
+        // Forgets what was known of the flow before a retarget. Called with
+        // mutex held.
+        void forget();
+        std::string targetId() const;
         void recomputeMismatch();
     };
 

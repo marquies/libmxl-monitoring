@@ -55,8 +55,16 @@ extern "C"
         // The flow's data was replaced, typically by a writer that restarted.
         MXL_MONITORING_ACCESS_FLOW_INVALID,
         MXL_MONITORING_ACCESS_OTHER,
+        // No flow to read or write: the handle's target was cleared on
+        // purpose, e.g. by an NMOS controller disconnecting a receiver.
+        MXL_MONITORING_ACCESS_DISCONNECTED,
         MXL_MONITORING_ACCESS_COUNT,
     } mxlMonitoringAccess;
+
+    // One word per access state: starting, open, domain_unavailable,
+    // flow_not_found (also for a flow whose data was replaced under an open
+    // reader or writer), permission_denied, flow_error, disconnected.
+    char const* mxlMonitoringAccessName(mxlMonitoringAccess access);
 
     typedef enum mxlMonitoringRead
     {
@@ -137,12 +145,32 @@ extern "C"
     // Frees every flow with it; their handles are invalid afterwards.
     mxlStatus mxlMonitoringDestroy(mxlMonitoring monitoring);
 
+#define MXL_MONITORING_ID 256
+
     // A flow is known by its id before it is opened, so a failure to reach it
-    // has a flow to belong to.
+    // has a flow to belong to. The id is what the flow is reported as, up to
+    // MXL_MONITORING_ID - 1 characters; it is also the libmxl flow it opens
+    // unless mxlMonitoringSetFlowTarget names another.
     mxlStatus mxlMonitoringAddFlow(mxlMonitoring monitoring, char const* flowId, mxlMonitoringRole role, mxlMonitoringFlow* flow);
     // No record call may run on the flow during or after its removal. Its
     // active conditions end without an event.
     mxlStatus mxlMonitoringRemoveFlow(mxlMonitoring monitoring, mxlMonitoringFlow flow);
+
+    // Points the handle at another libmxl flow, for a reader slot that is
+    // reported under its own name whichever flow it is connected to. NULL or
+    // "" disconnects it. A change keeps every count and forgets what was
+    // known of the flow before: its format, definition, last data, age and
+    // last error. Timing set with mxlMonitoringSetFlowTiming stays, and so
+    // does a stall already counted until data moves. Call from the thread
+    // recording for the flow, between reads, or before any thread records.
+    mxlStatus mxlMonitoringSetFlowTarget(mxlMonitoringFlow flow, char const* flowId);
+
+    // Where the flow stands now, without taking a snapshot. STARTING for a
+    // NULL handle.
+    mxlMonitoringAccess mxlMonitoringGetFlowAccess(mxlMonitoringFlow flow);
+
+    // The text of the flow's last failure, as the snapshot's lastErrorDetail.
+    mxlStatus mxlMonitoringGetLastErrorDetail(mxlMonitoringFlow flow, char* buffer, size_t size);
 
     typedef struct mxlMonitoringFlowFormat_t
     {
@@ -165,12 +193,14 @@ extern "C"
     // reader at the head finds nothing until the next grain is due, which is
     // normal; while the rate is unknown, TOO_EARLY does not count. A stall
     // counts once when stallTimeoutNs pass without data, and again only after
-    // data moved or the flow was opened. Unless this was called, the reader
+    // data moved: reopening a flow that still delivers nothing is the same
+    // stall. Unless this was called, the reader
     // wrappers derive both on every open, as mxl-reader does.
     mxlStatus mxlMonitoringSetFlowTiming(mxlMonitoringFlow flow, uint64_t graceNs, uint64_t stallTimeoutNs);
 
     // Each attempt to reach the flow: MXL_MONITORING_ACCESS_OPEN on success,
-    // the reason otherwise.
+    // the reason otherwise. DISCONNECTED is not an attempt; it comes from
+    // mxlMonitoringSetFlowTarget and is ignored here.
     void mxlMonitoringRecordAccess(mxlMonitoringFlow flow, mxlMonitoringAccess access, mxlStatus status);
 
     // The result of one libmxl read. index is the grain read, or the head
@@ -233,10 +263,12 @@ extern "C"
 
     typedef struct mxlMonitoringFlowSnapshot_t
     {
-        uint32_t version; // 1
+        uint32_t version; // 2
         uint32_t size;    // sizeof(mxlMonitoringFlowSnapshot)
 
-        char flowId[37];
+        char flowId[MXL_MONITORING_ID];
+        // The libmxl flow the handle reads or writes; "" when disconnected.
+        char target[MXL_MONITORING_ID];
         mxlMonitoringRole role;
         mxlMonitoringUnit unit;
         mxlDataFormat format;
@@ -296,23 +328,33 @@ extern "C"
         MXL_MONITORING_CONDITION_WRITE,
     } mxlMonitoringConditionKind;
 
+    // What the events of one condition say, for a caller recording by hand:
+    // kind and outcome name the condition as in mxlMonitoringEvent (outcome
+    // an mxlMonitoringAccess, -Read or -Write value), content the issue for
+    // INVALID_CONTENT and INVALID_INPUT. The reader wrappers describe what
+    // they record themselves. Not for a hot path: it takes a lock and copies
+    // the text.
+    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
+        char const* detail);
+
     typedef enum mxlMonitoringPhase
     {
         MXL_MONITORING_PHASE_STARTED,    // first occurrence
         // Once per persistIntervalNs while it recurs, or while the flow it
-        // concerns delivers nothing.
+        // concerns delivers nothing and is not disconnected.
         MXL_MONITORING_PHASE_PERSISTING,
-        // Access: the flow is open again. Read and write: see recoverDelayNs.
+        // Access: the flow is open again, or disconnected on purpose. Read
+        // and write: see recoverDelayNs.
         MXL_MONITORING_PHASE_RECOVERED,
     } mxlMonitoringPhase;
 
     typedef struct mxlMonitoringEvent_t
     {
-        uint32_t version; // 1
+        uint32_t version; // 2
         uint32_t size;    // sizeof(mxlMonitoringEvent)
 
         uint64_t timeNs;
-        char flowId[37];
+        char flowId[MXL_MONITORING_ID];
         mxlMonitoringRole role;
         mxlMonitoringConditionKind kind;
         mxlMonitoringPhase phase;

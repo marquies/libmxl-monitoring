@@ -35,7 +35,7 @@ namespace mxl::monitoring
                 mxlStatus status, std::uint64_t index, std::uint64_t occurrences)
             {
                 auto event = mxlMonitoringEvent{};
-                event.version = 1;
+                event.version = 2;
                 event.size = sizeof(mxlMonitoringEvent);
                 event.timeNs = now;
                 copyText(flow.id, event.flowId, sizeof(event.flowId));
@@ -95,7 +95,8 @@ namespace mxl::monitoring
                 // the flow delivers good data again, so a flow that merely
                 // went quiet has not recovered.
                 auto const delivering = flow.delivering(now);
-                auto const recovered = accessCondition ? flow.access.load(Relaxed) == MXL_MONITORING_ACCESS_OPEN
+                auto const access = flow.access.load(Relaxed);
+                auto const recovered = accessCondition ? access == MXL_MONITORING_ACCESS_OPEN || access == MXL_MONITORING_ACCESS_DISCONNECTED
                                                        : delta == 0 && since(now, c.lastOccurrenceAt) >= monitoring.recoverDelayNs &&
                                                              ok > c.okAtLastOccurrence && delivering;
                 if (recovered)
@@ -108,7 +109,7 @@ namespace mxl::monitoring
                 // A condition persists while it recurs, and while a flow it
                 // stopped stays without data: a reader waiting for a writer
                 // that went away meets one TOO_EARLY index, then nothing.
-                auto const persists = c.pending > 0 || (!accessCondition && !delivering);
+                auto const persists = c.pending > 0 || (!accessCondition && !delivering && access != MXL_MONITORING_ACCESS_DISCONNECTED);
                 if (persists && since(now, c.lastEventAt) >= monitoring.persistIntervalNs)
                 {
                     emit(c, kind, outcome, content, MXL_MONITORING_PHASE_PERSISTING, status, index, c.pending);

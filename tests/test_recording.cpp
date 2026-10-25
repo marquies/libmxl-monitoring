@@ -272,3 +272,109 @@ TEST_CASE("Bad arguments are refused rather than recorded", "[recording]")
     auto format = mxlMonitoringFlowFormat{};
     CHECK(mxlMonitoringSetFlowFormat(flow, &format) == MXL_ERR_INVALID_ARG);
 }
+
+TEST_CASE("Retargeting keeps the counts and forgets the flow left", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, context.dueIndex(), 1);
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, 3, 1);
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, "d4d00000-0000-0000-0000-0000000000ff") == MXL_STATUS_OK);
+
+    auto s = context.snapshot();
+    CHECK(std::string{s.flowId} == FlowId);
+    CHECK(std::string{s.target} == "d4d00000-0000-0000-0000-0000000000ff");
+    CHECK(s.access == MXL_MONITORING_ACCESS_STARTING);
+    CHECK(s.reads[MXL_MONITORING_READ_OK] == 1);
+    CHECK(s.reads[MXL_MONITORING_READ_TOO_LATE] == 1);
+    CHECK(s.opens == 1);
+    CHECK(std::string{s.mediaType}.empty());
+    CHECK(s.unit == MXL_MONITORING_UNIT_UNKNOWN);
+    CHECK(s.lastDataTimeNs == 0);
+    CHECK(s.lastErrorTimeNs == 0);
+    CHECK_FALSE(s.delivering);
+
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, nullptr) == MXL_STATUS_OK);
+    s = context.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_DISCONNECTED);
+    CHECK(std::string{s.target}.empty());
+    CHECK(std::string{mxlMonitoringAccessName(s.access)} == "disconnected");
+}
+
+TEST_CASE("Pointing a flow at the flow it already has changes nothing", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, context.dueIndex(), 1);
+    REQUIRE(mxlMonitoringSetFlowTarget(flow, FlowId) == MXL_STATUS_OK);
+    auto const s = context.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_OPEN);
+    CHECK(std::string{s.mediaType} == "video/v210");
+    CHECK(s.delivering);
+}
+
+TEST_CASE("Ids are names up to the length a snapshot carries", "[recording]")
+{
+    auto context = Context{};
+    auto flow = mxlMonitoringFlow{};
+    auto const longest = std::string(MXL_MONITORING_ID - 1, 'x');
+    CHECK(mxlMonitoringAddFlow(context.monitoring, longest.c_str(), MXL_MONITORING_ROLE_READER, &flow) == MXL_STATUS_OK);
+    CHECK(std::string{context.snapshot().flowId} == longest);
+    auto const tooLong = std::string(MXL_MONITORING_ID, 'x');
+    CHECK(mxlMonitoringAddFlow(context.monitoring, tooLong.c_str(), MXL_MONITORING_ROLE_WRITER, &flow) == MXL_ERR_INVALID_ARG);
+}
+
+TEST_CASE("Every access state has mxl-reader's name", "[recording]")
+{
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_STARTING)} == "starting");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_OPEN)} == "open");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE)} == "domain_unavailable");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_FLOW_NOT_FOUND)} == "flow_not_found");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_FLOW_INVALID)} == "flow_not_found");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_PERMISSION_DENIED)} == "permission_denied");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_OTHER)} == "flow_error");
+    CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_DISCONNECTED)} == "disconnected");
+}
+
+TEST_CASE("Reopening a flow that still delivers nothing is the same stall", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open(); // stall after 100 ms
+    auto const index = context.dueIndex();
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index, 1);
+    REQUIRE(context.snapshot().stalls == 1);
+    mxlMonitoringRecordRead(flow, MXL_ERR_FLOW_INVALID, index, 1);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index + 10, 1);
+    CHECK(context.snapshot().stalls == 1);
+
+    INFO("data moving ends it; the next stretch without data is a new stall");
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, index + 10, 1);
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index + 11, 1);
+    CHECK(context.snapshot().stalls == 2);
+}
+
+TEST_CASE("Disconnecting is not an attempt to reach a flow", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_DISCONNECTED, MXL_STATUS_OK);
+    auto const s = context.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_OPEN);
+    CHECK(s.accessFailures[MXL_MONITORING_ACCESS_DISCONNECTED] == 0);
+}
+
+TEST_CASE("The last failure's text is there without a snapshot, and layouts carry version 2", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.add();
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_ACCESS, MXL_MONITORING_ACCESS_OTHER, MXL_MONITORING_CONTENT_COUNT,
+                "cannot open flow x: status 1") == MXL_STATUS_OK);
+    char text[MXL_MONITORING_TEXT];
+    REQUIRE(mxlMonitoringGetLastErrorDetail(flow, text, sizeof(text)) == MXL_STATUS_OK);
+    CHECK(std::string{text} == "cannot open flow x: status 1");
+    CHECK(context.snapshot().version == 2);
+}

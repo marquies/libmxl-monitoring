@@ -70,6 +70,12 @@ The wrappers take the arguments of the libmxl function they are named after and
 return its status unchanged. A process that calls libmxl itself records with
 `mxlMonitoringRecordRead`, `mxlMonitoringRecordWrite` and the other
 `mxlMonitoringRecord*` functions instead.
+`mxlMonitoringDescribe` gives the events of such a condition their text.
+
+A flow handle is reported under its id and opens the libmxl flow of the same
+id, unless `mxlMonitoringSetFlowTarget` points it at another: a reader slot
+an NMOS controller connects keeps its name and its counts while the flow it
+reads changes, and is `disconnected` while it reads none.
 
 ## Build
 

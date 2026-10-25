@@ -77,7 +77,7 @@ namespace mxl::monitoring
             }
             if (isLoss(status))
             {
-                flow.describeAccess(mxlMonitoringClassifyAccess(status), "flow went away");
+                flow.describeAccess(mxlMonitoringClassifyAccess(status), std::format("flow {} went away", flow.targetId()));
             }
             else if (status == MXL_ERR_PERMISSION_DENIED)
             {
@@ -183,18 +183,29 @@ extern "C"
         {
             return MXL_ERR_INVALID_ARG;
         }
-        auto status = mxlCreateFlowReader(instance, f->id.c_str(), options, reader);
+        auto const target = f->targetId();
+        if (target.empty())
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        auto status = mxlCreateFlowReader(instance, target.c_str(), options, reader);
         if (status != MXL_STATUS_OK)
         {
             auto access = mxlMonitoringClassifyAccess(status);
+            // Replaced data is a loss only under a reader already open.
+            if (access == MXL_MONITORING_ACCESS_FLOW_INVALID)
+            {
+                access = MXL_MONITORING_ACCESS_OTHER;
+            }
             if (access != MXL_MONITORING_ACCESS_FLOW_NOT_FOUND && access != MXL_MONITORING_ACCESS_PERMISSION_DENIED &&
-                permissionDenied(domainOf(*f), f->id))
+                permissionDenied(domainOf(*f), target))
             {
                 access = MXL_MONITORING_ACCESS_PERMISSION_DENIED;
             }
-            f->describeAccess(access, access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND       ? std::string{"flow not found in the domain"}
-                        : access == MXL_MONITORING_ACCESS_PERMISSION_DENIED ? std::string{"permission denied opening the flow"}
-                                                                            : std::format("cannot open the flow: status {}", static_cast<int>(status)));
+            f->describeAccess(access, access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND ? std::format("flow {} not found in the domain", target)
+                                      : access == MXL_MONITORING_ACCESS_PERMISSION_DENIED
+                                          ? std::format("permission denied opening flow {}", target)
+                                          : std::format("cannot open flow {}: status {}", target, static_cast<int>(status)));
             mxlMonitoringRecordAccess(flow, access, status);
             return status;
         }
@@ -202,16 +213,16 @@ extern "C"
         auto info = mxlFlowInfo{};
         if (status = mxlFlowReaderGetInfo(*reader, &info); status != MXL_STATUS_OK)
         {
-            return abandon(*f, instance, reader, status, std::format("cannot read the flow info: status {}", static_cast<int>(status)));
+            return abandon(*f, instance, reader, status, std::format("cannot read the info of flow {}: status {}", target, static_cast<int>(status)));
         }
         auto definition = std::string{};
-        if (status = readDefinition(instance, f->id, definition); status != MXL_STATUS_OK)
+        if (status = readDefinition(instance, target, definition); status != MXL_STATUS_OK)
         {
-            return abandon(*f, instance, reader, status, std::format("cannot read the flow definition: status {}", static_cast<int>(status)));
+            return abandon(*f, instance, reader, status, std::format("cannot read the definition of flow {}", target));
         }
         if (status = mxlMonitoringSetDefinition(flow, definition.c_str()); status != MXL_STATUS_OK)
         {
-            return abandon(*f, instance, reader, status, "the flow definition is not JSON");
+            return abandon(*f, instance, reader, status, std::format("cannot read the definition of flow {}", target));
         }
 
         auto const& common = info.config.common;
