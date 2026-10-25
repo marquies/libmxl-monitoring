@@ -146,10 +146,10 @@ TEST_CASE("Replication flows carry the gateway prefixes", "[prometheus]")
     CHECK(text.find("mxl_gateway_target_writes_total{") != std::string::npos);
 }
 
-TEST_CASE("A flow id or media type cannot break a label", "[prometheus]")
+TEST_CASE("A flow id is escaped and a media type cleaned, so neither breaks a label", "[prometheus]")
 {
     auto context = Context{};
-    auto const flow = context.add(MXL_MONITORING_ROLE_READER, "a\"b\\c\nd");
+    auto const flow = context.add(MXL_MONITORING_ROLE_READER, "cam:a\"b\\c\nd");
     auto format = mxlMonitoringFlowFormat{};
     format.version = 1;
     format.size = sizeof(format);
@@ -157,7 +157,8 @@ TEST_CASE("A flow id or media type cannot break a label", "[prometheus]")
     REQUIRE(mxlMonitoringSetFlowFormat(flow, &format) == MXL_STATUS_OK);
     mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
     auto const text = render(context.monitoring);
-    CHECK(contains(text, "mxl_reader_flow_info{flow=\"a_b_c_d\",media_type=\"video/_x_\",unit=\"grains\"} 1"));
+    INFO("a slot name keeps the label mxl-reader gave it; the media type is cleaned as mxl-reader did");
+    CHECK(contains(text, "mxl_reader_flow_info{flow=\"cam:a\\\"b\\\\c\\nd\",media_type=\"video/_x_\",unit=\"grains\"} 1"));
 }
 
 TEST_CASE("A buffer too small is refused with the size it needs", "[prometheus]")

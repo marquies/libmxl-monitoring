@@ -20,6 +20,24 @@ namespace
         return out;
     }
 
+    // A flow id or slot name as it is, escaped as the exposition format
+    // requires, so a name like "cam:video" keeps the label mxl-reader gave it.
+    std::string escaped(char const* value)
+    {
+        auto out = std::string{};
+        for (auto const* c = value; *c != '\0'; ++c)
+        {
+            switch (*c)
+            {
+                case '\\': out += "\\\\"; break;
+                case '"':  out += "\\\""; break;
+                case '\n': out += "\\n"; break;
+                default:   out += *c; break;
+            }
+        }
+        return out;
+    }
+
     char const* prefix(mxlMonitoringRole role)
     {
         switch (role)
@@ -174,7 +192,7 @@ namespace
     private:
         static std::string id(mxlMonitoringFlowSnapshot const& s)
         {
-            return labelValue(s.flowId);
+            return escaped(s.flowId);
         }
 
         void line(std::string const& text)
