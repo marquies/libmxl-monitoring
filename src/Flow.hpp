@@ -145,7 +145,7 @@ namespace mxl::monitoring
         void describeContent(mxlMonitoringContent issue, std::string detail);
         // Forgets what was known of the flow before a retarget. Called with
         // mutex held.
-        void forget() noexcept;
+        void forget();
         std::string targetId() const;
         void recomputeMismatch();
     };

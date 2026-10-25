@@ -21,7 +21,7 @@ namespace
     }
 
     // A flow id or slot name as it is, escaped as the exposition format
-    // requires, so a name like "cam:video" keeps the label mxl-reader gave it.
+    // requires: a name like "cam:video" keeps its colon.
     std::string escaped(char const* value)
     {
         auto out = std::string{};

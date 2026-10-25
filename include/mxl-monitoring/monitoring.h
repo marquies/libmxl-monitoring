@@ -61,9 +61,9 @@ extern "C"
         MXL_MONITORING_ACCESS_COUNT,
     } mxlMonitoringAccess;
 
-    // One word per access state, as mxl-reader has named them: starting,
-    // open, domain_unavailable, flow_not_found (also for a flow whose data
-    // was replaced), permission_denied, flow_error, disconnected.
+    // One word per access state: starting, open, domain_unavailable,
+    // flow_not_found (also for a flow whose data was replaced under an open
+    // reader or writer), permission_denied, flow_error, disconnected.
     char const* mxlMonitoringAccessName(mxlMonitoringAccess access);
 
     typedef enum mxlMonitoringRead
@@ -160,11 +160,17 @@ extern "C"
     // reported under its own name whichever flow it is connected to. NULL or
     // "" disconnects it. A change keeps every count and forgets what was
     // known of the flow before: its format, definition, last data, age and
-    // last error. Call from the thread recording for the flow, between reads.
+    // last error. Timing set with mxlMonitoringSetFlowTiming stays, and so
+    // does a stall already counted until data moves. Call from the thread
+    // recording for the flow, between reads, or before any thread records.
     mxlStatus mxlMonitoringSetFlowTarget(mxlMonitoringFlow flow, char const* flowId);
 
-    // Where the flow stands now, without taking a snapshot.
+    // Where the flow stands now, without taking a snapshot. STARTING for a
+    // NULL handle.
     mxlMonitoringAccess mxlMonitoringGetFlowAccess(mxlMonitoringFlow flow);
+
+    // The text of the flow's last failure, as the snapshot's lastErrorDetail.
+    mxlStatus mxlMonitoringGetLastErrorDetail(mxlMonitoringFlow flow, char* buffer, size_t size);
 
     typedef struct mxlMonitoringFlowFormat_t
     {
@@ -187,12 +193,14 @@ extern "C"
     // reader at the head finds nothing until the next grain is due, which is
     // normal; while the rate is unknown, TOO_EARLY does not count. A stall
     // counts once when stallTimeoutNs pass without data, and again only after
-    // data moved or the flow was opened. Unless this was called, the reader
+    // data moved: reopening a flow that still delivers nothing is the same
+    // stall. Unless this was called, the reader
     // wrappers derive both on every open, as mxl-reader does.
     mxlStatus mxlMonitoringSetFlowTiming(mxlMonitoringFlow flow, uint64_t graceNs, uint64_t stallTimeoutNs);
 
     // Each attempt to reach the flow: MXL_MONITORING_ACCESS_OPEN on success,
-    // the reason otherwise.
+    // the reason otherwise. DISCONNECTED is not an attempt; it comes from
+    // mxlMonitoringSetFlowTarget and is ignored here.
     void mxlMonitoringRecordAccess(mxlMonitoringFlow flow, mxlMonitoringAccess access, mxlStatus status);
 
     // The result of one libmxl read. index is the grain read, or the head
@@ -255,7 +263,7 @@ extern "C"
 
     typedef struct mxlMonitoringFlowSnapshot_t
     {
-        uint32_t version; // 1
+        uint32_t version; // 2
         uint32_t size;    // sizeof(mxlMonitoringFlowSnapshot)
 
         char flowId[MXL_MONITORING_ID];
@@ -342,7 +350,7 @@ extern "C"
 
     typedef struct mxlMonitoringEvent_t
     {
-        uint32_t version; // 1
+        uint32_t version; // 2
         uint32_t size;    // sizeof(mxlMonitoringEvent)
 
         uint64_t timeNs;

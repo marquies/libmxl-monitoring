@@ -154,7 +154,7 @@ namespace mxl::monitoring
         contentDetail[issue] = std::move(detail);
     }
 
-    void Flow::forget() noexcept
+    void Flow::forget()
     {
         mediaType.clear();
         lastErrorDetail.clear();
@@ -182,7 +182,6 @@ namespace mxl::monitoring
         ageNs.store(0, Relaxed);
         lastProgressNs.store(0, Relaxed);
         earlyCountedIndex.store(std::numeric_limits<std::uint64_t>::max(), Relaxed);
-        stallCounted.store(false, Relaxed);
         access.store(target.empty() ? MXL_MONITORING_ACCESS_DISCONNECTED : MXL_MONITORING_ACCESS_STARTING, Relaxed);
     }
 
@@ -417,6 +416,18 @@ extern "C"
         }
     }
 
+    mxlStatus mxlMonitoringGetLastErrorDetail(mxlMonitoringFlow flow, char* buffer, size_t size)
+    {
+        auto* const f = toFlow(flow);
+        if (f == nullptr || buffer == nullptr || size == 0)
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        auto const lock = std::lock_guard{f->mutex};
+        copyText(f->lastErrorDetail, buffer, size);
+        return MXL_STATUS_OK;
+    }
+
     mxlMonitoringAccess mxlMonitoringGetFlowAccess(mxlMonitoringFlow flow)
     {
         auto* const f = toFlow(flow);
@@ -519,7 +530,7 @@ extern "C"
     void mxlMonitoringRecordAccess(mxlMonitoringFlow flow, mxlMonitoringAccess access, mxlStatus status)
     {
         auto* const f = toFlow(flow);
-        if (f == nullptr || !inRange(static_cast<int>(access), MXL_MONITORING_ACCESS_COUNT))
+        if (f == nullptr || !inRange(static_cast<int>(access), MXL_MONITORING_ACCESS_COUNT) || access == MXL_MONITORING_ACCESS_DISCONNECTED)
         {
             return;
         }
@@ -529,7 +540,6 @@ extern "C"
             add(f->opens, 1);
             f->lastProgressNs.store(now, Relaxed);
             f->earlyCountedIndex.store(std::numeric_limits<std::uint64_t>::max(), Relaxed);
-            f->stallCounted.store(false, Relaxed);
         }
         else if (access != MXL_MONITORING_ACCESS_STARTING)
         {
@@ -711,7 +721,7 @@ extern "C"
             auto const& f = *m->flows[i];
             auto& s = snapshots[i];
             s = mxlMonitoringFlowSnapshot{};
-            s.version = 1;
+            s.version = 2;
             s.size = sizeof(mxlMonitoringFlowSnapshot);
             copyText(f.id, s.flowId, sizeof(s.flowId));
             s.role = f.role;

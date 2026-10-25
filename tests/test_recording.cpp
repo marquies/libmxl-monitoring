@@ -335,3 +335,46 @@ TEST_CASE("Every access state has mxl-reader's name", "[recording]")
     CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_OTHER)} == "flow_error");
     CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_DISCONNECTED)} == "disconnected");
 }
+
+TEST_CASE("Reopening a flow that still delivers nothing is the same stall", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open(); // stall after 100 ms
+    auto const index = context.dueIndex();
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index, 1);
+    REQUIRE(context.snapshot().stalls == 1);
+    mxlMonitoringRecordRead(flow, MXL_ERR_FLOW_INVALID, index, 1);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index + 10, 1);
+    CHECK(context.snapshot().stalls == 1);
+
+    INFO("data moving ends it; the next stretch without data is a new stall");
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, index + 10, 1);
+    context.now += 150 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index + 11, 1);
+    CHECK(context.snapshot().stalls == 2);
+}
+
+TEST_CASE("Disconnecting is not an attempt to reach a flow", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_DISCONNECTED, MXL_STATUS_OK);
+    auto const s = context.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_OPEN);
+    CHECK(s.accessFailures[MXL_MONITORING_ACCESS_DISCONNECTED] == 0);
+}
+
+TEST_CASE("The last failure's text is there without a snapshot, and layouts carry version 2", "[recording]")
+{
+    auto context = Context{};
+    auto const flow = context.add();
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_ACCESS, MXL_MONITORING_ACCESS_OTHER, MXL_MONITORING_CONTENT_COUNT,
+                "cannot open flow x: status 1") == MXL_STATUS_OK);
+    char text[MXL_MONITORING_TEXT];
+    REQUIRE(mxlMonitoringGetLastErrorDetail(flow, text, sizeof(text)) == MXL_STATUS_OK);
+    CHECK(std::string{text} == "cannot open flow x: status 1");
+    CHECK(context.snapshot().version == 2);
+}

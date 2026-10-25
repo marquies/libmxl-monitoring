@@ -35,7 +35,7 @@ namespace mxl::monitoring
                 mxlStatus status, std::uint64_t index, std::uint64_t occurrences)
             {
                 auto event = mxlMonitoringEvent{};
-                event.version = 1;
+                event.version = 2;
                 event.size = sizeof(mxlMonitoringEvent);
                 event.timeNs = now;
                 copyText(flow.id, event.flowId, sizeof(event.flowId));

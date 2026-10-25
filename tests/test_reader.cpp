@@ -363,3 +363,20 @@ TEST_CASE("A slot reported under its own name opens the flow it is pointed at", 
     mxlDestroyInstance(instance);
     mxlMonitoringDestroy(monitoring);
 }
+
+TEST_CASE("A flow whose definition cannot be read is not open", "[reader]")
+{
+    auto domain = Domain{};
+    domain.createWriter(videoDefinition(VideoId));
+    auto const def = domain.path / (std::string{VideoId} + ".mxl-flow") / "flow_def.json";
+    REQUIRE(std::filesystem::exists(def));
+    std::filesystem::resize_file(def, 10);
+    auto reader = Reader{domain, VideoId};
+    CHECK(mxlMonitoringCreateFlowReader(reader.flow, reader.instance, "", &reader.reader) != MXL_STATUS_OK);
+    CHECK(reader.reader == nullptr);
+    auto const s = reader.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_OTHER);
+    CHECK(s.accessFailures[MXL_MONITORING_ACCESS_OTHER] == 1);
+    CHECK(s.opens == 0);
+    CHECK(std::string{s.lastErrorDetail} == std::string{"cannot read the definition of flow "} + VideoId);
+}

@@ -192,6 +192,11 @@ extern "C"
         if (status != MXL_STATUS_OK)
         {
             auto access = mxlMonitoringClassifyAccess(status);
+            // Replaced data is a loss only under a reader already open.
+            if (access == MXL_MONITORING_ACCESS_FLOW_INVALID)
+            {
+                access = MXL_MONITORING_ACCESS_OTHER;
+            }
             if (access != MXL_MONITORING_ACCESS_FLOW_NOT_FOUND && access != MXL_MONITORING_ACCESS_PERMISSION_DENIED &&
                 permissionDenied(domainOf(*f), target))
             {
@@ -213,12 +218,11 @@ extern "C"
         auto definition = std::string{};
         if (status = readDefinition(instance, target, definition); status != MXL_STATUS_OK)
         {
-            return abandon(*f, instance, reader, status,
-                std::format("cannot read the definition of flow {}: status {}", target, static_cast<int>(status)));
+            return abandon(*f, instance, reader, status, std::format("cannot read the definition of flow {}", target));
         }
         if (status = mxlMonitoringSetDefinition(flow, definition.c_str()); status != MXL_STATUS_OK)
         {
-            return abandon(*f, instance, reader, status, std::format("the definition of flow {} is not JSON", target));
+            return abandon(*f, instance, reader, status, std::format("cannot read the definition of flow {}", target));
         }
 
         auto const& common = info.config.common;
