@@ -1,8 +1,9 @@
 name: CI
 
 # Builds and tests the library both ways it is consumed: on its own against
-# the libmxl that go-mxl-builder installs, and as a subdirectory of a
-# dmf-mxl/mxl checkout, the way a media function built in that tree links it.
+# the libmxl that go-mxl-builder installs, and as a subdirectory of the MXL
+# checkout that libmxl is built from, the way a media function built in that
+# tree links it.
 # The concurrency tests run again under ThreadSanitizer.
 
 on:
@@ -16,9 +17,10 @@ permissions:
   contents: read
 
 env:
-  # The dmf-mxl/mxl commit go-mxl-builder's libmxl is built from; moves with
-  # the image tag below.
-  MXL_REF: 4a8a50e7
+  # The repository and commit go-mxl-builder's libmxl is built from, as named
+  # in go-mxl's .github/libmxl.version; they move with the image tag below.
+  MXL_SRC: https://github.com/qvest-digital/mxl.git
+  MXL_REF: c259243931333497e61faabeedac8048915dcb2b
   # vcpkg's binary cache lives under /root in the image; a container job's
   # HOME is elsewhere.
   VCPKG_DEFAULT_BINARY_CACHE: /root/.cache/vcpkg/archives
@@ -26,7 +28,7 @@ env:
 jobs:
   standalone:
     runs-on: ubuntu-latest
-    container: ghcr.io/qvest-digital/go-mxl-builder:1.0.0-rc.12
+    container: ghcr.io/qvest-digital/go-mxl-builder:1.1.0-rc.7
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -43,15 +45,15 @@ jobs:
 
   in-tree:
     runs-on: ubuntu-latest
-    container: ghcr.io/qvest-digital/go-mxl-builder:1.0.0-rc.12
+    container: ghcr.io/qvest-digital/go-mxl-builder:1.1.0-rc.7
     steps:
       - uses: actions/checkout@v4
         with:
           path: libmxl-monitoring
       # A full clone: GitHub refuses a shallow fetch of an arbitrary commit by SHA.
-      - name: Check out dmf-mxl/mxl
+      - name: Check out MXL
         run: |
-          git clone https://github.com/dmf-mxl/mxl.git mxl
+          git clone "$MXL_SRC" mxl
           git -C mxl checkout "$MXL_REF"
           mv libmxl-monitoring mxl/
           echo 'add_subdirectory(libmxl-monitoring)' >> mxl/CMakeLists.txt
@@ -79,7 +81,7 @@ jobs:
       - name: Build and test
         run: |
           docker run --rm -v "$PWD:/src" -w /src -e VCPKG_DEFAULT_BINARY_CACHE \
-            ghcr.io/qvest-digital/go-mxl-builder:1.0.0-rc.12 sh -ec '
+            ghcr.io/qvest-digital/go-mxl-builder:1.1.0-rc.7 sh -ec '
               cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
                 -DCMAKE_CXX_FLAGS=-fsanitize=thread -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread \
                 -DCMAKE_TOOLCHAIN_FILE=/root/vcpkg/scripts/buildsystems/vcpkg.cmake \

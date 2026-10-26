@@ -236,7 +236,8 @@ TEST_CASE("A slot taken as it stands, never written for its index, is missing", 
     auto reader = Reader{domain, VideoId};
     REQUIRE(mxlMonitoringCreateFlowReader(reader.flow, reader.instance, "", &reader.reader) == MXL_STATUS_OK);
     auto const index = currentIndex();
-    domain.writeGrain(index);
+    // The writer's first grain: libmxl invalidates a gap only behind an
+    // earlier commit, so the slot before it stays as it was.
     domain.writeGrain(index + 2);
     INFO("whole grains only: the gap is not there yet");
     CHECK(reader.readGrain(index + 1) == MXL_ERR_OUT_OF_RANGE_TOO_EARLY);
@@ -244,6 +245,23 @@ TEST_CASE("A slot taken as it stands, never written for its index, is missing", 
     REQUIRE(reader.readGrain(index + 1, MXL_GRAIN_VALID_SLICES_ANY) == MXL_STATUS_OK);
     auto const s = reader.snapshot();
     CHECK(s.content[MXL_MONITORING_CONTENT_MISSING] == 1);
+    CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
+}
+
+TEST_CASE("A grain a writer jumped over is invalid", "[reader]")
+{
+    auto domain = Domain{};
+    domain.createWriter(videoDefinition(VideoId));
+    auto reader = Reader{domain, VideoId};
+    REQUIRE(mxlMonitoringCreateFlowReader(reader.flow, reader.instance, "", &reader.reader) == MXL_STATUS_OK);
+    auto const index = currentIndex();
+    domain.writeGrain(index);
+    domain.writeGrain(index + 2);
+    INFO("libmxl marks the grain between them invalid as the writer opens index + 2");
+    REQUIRE(reader.readGrain(index + 1) == MXL_STATUS_OK);
+    auto const s = reader.snapshot();
+    CHECK(s.content[MXL_MONITORING_CONTENT_INVALID] == 1);
+    CHECK(s.content[MXL_MONITORING_CONTENT_MISSING] == 0);
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
 }
 

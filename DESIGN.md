@@ -115,11 +115,14 @@ compared once per open between the flow definition and the expectation; the
 result is applied to every grain read while it differs.
 
 `missing` and `invalid` are kept apart. `missing` means the ring slot holds
-another index's grain, so this one was never written; `invalid` means the
-writer marked it `MXL_GRAIN_FLAG_INVALID`, typically to fill a gap. With
-`MXL_GRAIN_VALID_SLICES_ALL`, libmxl answers TOO_EARLY for a slot that was
-never written; only a read with `MXL_GRAIN_VALID_SLICES_ANY` returns the stale
-grain that the check reports as `missing`.
+another index's grain, so this one was never written; `invalid` means the grain
+carries `MXL_GRAIN_FLAG_INVALID`. libmxl sets that flag itself on the grains a
+writer jumps over, and clears it when a grain is opened for writing, so a gap
+behind a writer's earlier commit reads as `invalid`, and `missing` is left for a
+slot no writer has reached. With `MXL_GRAIN_VALID_SLICES_ALL`, libmxl answers
+TOO_EARLY for a slot that was never written; only a read with
+`MXL_GRAIN_VALID_SLICES_ANY` returns the stale grain that the check reports as
+`missing`.
 
 The legal-value check is off unless the expectation asks for it: a test
 pattern can carry reserved codes on purpose, and a check that always fires
