@@ -18,14 +18,16 @@ extern "C"
 #endif
 
     // mxlCreateInstance. A NULL result counts as DOMAIN_UNAVAILABLE. The
-    // domain is kept on the flow, for telling a permission failure apart.
+    // domain is kept on the flow, for telling a lost domain and a permission
+    // failure apart.
     mxlInstance mxlMonitoringCreateInstance(mxlMonitoringFlow flow, char const* domain, char const* options);
 
     // mxlCreateFlowReader for the flow's id, then its info and definition:
     // the flow counts as open only once all three are read, and a reader
     // whose definition cannot be read is released again. libmxl reports a
     // reader it could not open for want of permission as an unknown error,
-    // so on failure the flow's files are checked for permission too.
+    // and a flow whose domain went away as not found, so on failure the
+    // domain is checked first and then the flow's files for permission.
     mxlStatus mxlMonitoringCreateFlowReader(mxlMonitoringFlow flow, mxlInstance instance, char const* options, mxlFlowReader* reader);
 
     mxlStatus mxlMonitoringFlowReaderGetGrain(mxlMonitoringFlow flow, mxlFlowReader reader, uint64_t index, uint64_t timeoutNs,

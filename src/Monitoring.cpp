@@ -241,6 +241,24 @@ namespace mxl::monitoring
         buffer[n] = '\0';
     }
 
+    std::string domainUnavailable(std::string const& domain)
+    {
+        if (domain.empty())
+        {
+            return {};
+        }
+        struct stat st{};
+        if (::stat(domain.c_str(), &st) != 0)
+        {
+            return std::format("MXL domain {} does not exist", domain);
+        }
+        if (!S_ISDIR(st.st_mode) || ::access(domain.c_str(), R_OK | X_OK) != 0)
+        {
+            return std::format("cannot open MXL domain {}", domain);
+        }
+        return {};
+    }
+
     bool permissionDenied(std::string const& domain, std::string const& flowId)
     {
         if (domain.empty())

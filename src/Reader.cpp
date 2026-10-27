@@ -1,4 +1,3 @@
-#include <sys/stat.h>
 #include <algorithm>
 #include <array>
 #include <format>
@@ -168,9 +167,8 @@ extern "C"
         {
             // The volume may not be mounted yet, or nothing has created the
             // domain: tell the two apart for whoever reads the detail.
-            struct stat st{};
-            f->describeAccess(MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE,
-                ::stat(domain, &st) == 0 ? std::format("cannot open MXL domain {}", domain) : std::format("MXL domain {} does not exist", domain));
+            auto const detail = domainUnavailable(domain);
+            f->describeAccess(MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE, detail.empty() ? std::format("cannot open MXL domain {}", domain) : detail);
             mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE, MXL_ERR_UNKNOWN);
         }
         return instance;
@@ -197,15 +195,23 @@ extern "C"
             {
                 access = MXL_MONITORING_ACCESS_OTHER;
             }
-            if (access != MXL_MONITORING_ACCESS_FLOW_NOT_FOUND && access != MXL_MONITORING_ACCESS_PERMISSION_DENIED &&
-                permissionDenied(domainOf(*f), target))
+            auto const domain = domainOf(*f);
+            auto const domainDetail = domainUnavailable(domain);
+            if (!domainDetail.empty())
+            {
+                access = MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE;
+            }
+            else if (access != MXL_MONITORING_ACCESS_FLOW_NOT_FOUND && access != MXL_MONITORING_ACCESS_PERMISSION_DENIED &&
+                     permissionDenied(domain, target))
             {
                 access = MXL_MONITORING_ACCESS_PERMISSION_DENIED;
             }
-            f->describeAccess(access, access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND ? std::format("flow {} not found in the domain", target)
-                                      : access == MXL_MONITORING_ACCESS_PERMISSION_DENIED
-                                          ? std::format("permission denied opening flow {}", target)
-                                          : std::format("cannot open flow {}: status {}", target, static_cast<int>(status)));
+            f->describeAccess(access,
+                access == MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE ? domainDetail
+                : access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND   ? std::format("flow {} not found in the domain", target)
+                : access == MXL_MONITORING_ACCESS_PERMISSION_DENIED
+                    ? std::format("permission denied opening flow {}", target)
+                    : std::format("cannot open flow {}: status {}", target, static_cast<int>(status)));
             mxlMonitoringRecordAccess(flow, access, status);
             return status;
         }
