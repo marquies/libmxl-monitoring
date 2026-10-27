@@ -189,6 +189,11 @@ namespace mxl::monitoring
     // Whether the domain's files for a flow deny this process access.
     bool permissionDenied(std::string const& domain, std::string const& flowId);
 
+    // Why the domain cannot be used, or empty when it can. libmxl reports a
+    // flow in a domain that went away after the instance was created as not
+    // found, so this tells the two apart.
+    std::string domainUnavailable(std::string const& domain);
+
     // Delivering means data moved within the last second.
     constexpr std::uint64_t DeliveringWindowNs = NsPerSecond;
 

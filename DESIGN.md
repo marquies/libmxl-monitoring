@@ -92,6 +92,7 @@ Each rule exists because the plain count misleads:
 | --- | --- |
 | FLOW_NOT_FOUND, FLOW_INVALID, INVALID_FLOW_READER and INVALID_FLOW_WRITER from a read or write count as a loss of access, once per open | the flow went away under an open reader or writer; counting each retry as a failed read would turn one restart into thousands of errors |
 | FLOW_INVALID when opening counts as `other`, not as a loss | replaced data is a loss only for a reader that already had the flow open |
+| An open that fails counts as domain unavailable when the domain directory is missing, is not a directory, or cannot be read or traversed | an instance keeps the domain it was created on, and libmxl reports a flow in a domain that went away since as not found; the domain is the cause, not the flow |
 | An open that fails with a status other than not found or permission denied counts as permission denied when the flow's directory in the domain exists but cannot be read or traversed | a permission problem is reported as one, whatever status libmxl returned for it |
 | TIMEOUT is classified as TOO_EARLY | a blocking read that timed out found nothing to read yet |
 | TOO_EARLY counts once per index, and only once the index is a grace period past its media timestamp | a reader at the head waits for the next grain on every read; that is normal, not a fault |

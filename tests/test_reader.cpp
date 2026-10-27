@@ -195,6 +195,24 @@ TEST_CASE("A flow not in the domain is not found", "[reader]")
     CHECK(std::string{s.lastErrorDetail} == std::string{"flow "} + VideoId + " not found in the domain");
 }
 
+TEST_CASE("A flow whose domain went away after the instance is domain unavailable", "[reader]")
+{
+    auto domain = Domain{};
+    domain.createWriter(videoDefinition(VideoId));
+    auto reader = Reader{domain, VideoId};
+    auto const away = std::filesystem::path{domain.path.string() + ".away"};
+    std::filesystem::rename(domain.path, away);
+    INFO("libmxl answers as for a flow not in the domain");
+    auto const status = mxlMonitoringCreateFlowReader(reader.flow, reader.instance, "", &reader.reader);
+    std::filesystem::rename(away, domain.path);
+    CHECK(status == MXL_ERR_FLOW_NOT_FOUND);
+    auto const s = reader.snapshot();
+    CHECK(s.access == MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE);
+    CHECK(s.accessFailures[MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE] == 1);
+    CHECK(s.accessFailures[MXL_MONITORING_ACCESS_FLOW_NOT_FOUND] == 0);
+    CHECK(std::string{s.lastErrorDetail} == "MXL domain " + domain.path.string() + " does not exist");
+}
+
 TEST_CASE("Opening a flow reads what it is", "[reader]")
 {
     auto domain = Domain{};
