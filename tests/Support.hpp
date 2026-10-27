@@ -13,6 +13,27 @@ namespace mxl::monitoring::tests
 
     inline char const* const FlowId = "d4d00000-0000-0000-0000-000000000001";
 
+    // Small flows for the wrapper tests against a real domain.
+    inline std::string videoDefinition(char const* id)
+    {
+        return std::string{R"({"id": ")"} + id + R"(", "description": "test", "label": "test",
+            "tags": {"urn:x-nmos:tag:grouphint/v1.0": ["libmxl-monitoring-tests:Video"]},
+            "format": "urn:x-nmos:format:video", "parents": [], "media_type": "video/v210",
+            "grain_rate": {"numerator": 50, "denominator": 1},
+            "frame_width": 96, "frame_height": 54, "interlace_mode": "progressive", "colorspace": "BT709",
+            "components": [{"name": "Y", "width": 96, "height": 54, "bit_depth": 10},
+                           {"name": "Cb", "width": 48, "height": 54, "bit_depth": 10},
+                           {"name": "Cr", "width": 48, "height": 54, "bit_depth": 10}]})";
+    }
+
+    inline std::string audioDefinition(char const* id)
+    {
+        return std::string{R"({"id": ")"} + id + R"(", "description": "test", "label": "test",
+            "tags": {"urn:x-nmos:tag:grouphint/v1.0": ["libmxl-monitoring-tests:Audio"]},
+            "format": "urn:x-nmos:format:audio", "parents": [], "media_type": "audio/float32",
+            "sample_rate": {"numerator": 48000}, "channel_count": 2, "bit_depth": 32})";
+    }
+
     // A context on a clock the test moves by hand, with every event kept.
     struct Context
     {

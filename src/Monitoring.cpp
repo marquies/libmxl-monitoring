@@ -241,6 +241,12 @@ namespace mxl::monitoring
         buffer[n] = '\0';
     }
 
+    std::string domainOf(Flow const& flow)
+    {
+        auto const lock = std::lock_guard{flow.mutex};
+        return flow.domain;
+    }
+
     std::string domainUnavailable(std::string const& domain)
     {
         if (domain.empty())

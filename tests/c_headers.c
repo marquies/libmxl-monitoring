@@ -5,6 +5,7 @@
 #include "mxl-monitoring/monitoring.h"
 #include "mxl-monitoring/prometheus.h"
 #include "mxl-monitoring/reader.h"
+#include "mxl-monitoring/writer.h"
 
 /* Referenced from C++ so the object is linked into the tests. */
 size_t mxlMonitoringTestCSnapshotSize(void)

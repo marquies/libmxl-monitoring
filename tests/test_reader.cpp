@@ -22,26 +22,6 @@ namespace
     constexpr char const* VideoId = "5fbec3b1-1b0f-417d-9059-8b94a4710001";
     constexpr char const* AudioId = "5fbec3b1-1b0f-417d-9059-8b94a4710002";
 
-    std::string videoDefinition(char const* id)
-    {
-        return std::string{R"({"id": ")"} + id + R"(", "description": "test", "label": "test",
-            "tags": {"urn:x-nmos:tag:grouphint/v1.0": ["libmxl-monitoring-tests:Video"]},
-            "format": "urn:x-nmos:format:video", "parents": [], "media_type": "video/v210",
-            "grain_rate": {"numerator": 50, "denominator": 1},
-            "frame_width": 96, "frame_height": 54, "interlace_mode": "progressive", "colorspace": "BT709",
-            "components": [{"name": "Y", "width": 96, "height": 54, "bit_depth": 10},
-                           {"name": "Cb", "width": 48, "height": 54, "bit_depth": 10},
-                           {"name": "Cr", "width": 48, "height": 54, "bit_depth": 10}]})";
-    }
-
-    std::string audioDefinition(char const* id)
-    {
-        return std::string{R"({"id": ")"} + id + R"(", "description": "test", "label": "test",
-            "tags": {"urn:x-nmos:tag:grouphint/v1.0": ["libmxl-monitoring-tests:Audio"]},
-            "format": "urn:x-nmos:format:audio", "parents": [], "media_type": "audio/float32",
-            "sample_rate": {"numerator": 48000}, "channel_count": 2, "bit_depth": 32})";
-    }
-
     // A domain of its own per test, on tmpfs, removed afterwards.
     struct Domain
     {
