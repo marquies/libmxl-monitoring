@@ -38,6 +38,7 @@ increments atomics. `DESIGN.md` gives the reasons behind these rules.
 | `mxl-monitoring` | `mxl-monitoring/monitoring.h` | flows, recording, snapshots, events |
 | | `mxl-monitoring/content.h` | flow definitions, expectations, grain and sample checks |
 | | `mxl-monitoring/reader.h` | libmxl reader calls that record their own outcome |
+| | `mxl-monitoring/writer.h` | libmxl writer calls that record their own outcome |
 | `mxl-monitoring-prometheus` | `mxl-monitoring/prometheus.h` | text exposition for `/metrics` |
 
 Readers are exported under `mxl_reader_*`, with the names and label values

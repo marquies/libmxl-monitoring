@@ -95,6 +95,10 @@ namespace mxl::monitoring
         std::atomic<std::int64_t> ageNs{0};
         Counter lastProgressNs{0};
 
+        // Writer-thread state: the range of samples opened, until committed.
+        Counter samplesIndex{0};
+        Counter samplesCount{0};
+
         // Recording-thread state for counting TOO_EARLY and stalls once.
         Counter earlyCountedIndex{std::numeric_limits<std::uint64_t>::max()};
         std::atomic<bool> stallCounted{false};
@@ -188,6 +192,9 @@ namespace mxl::monitoring
 
     // Whether the domain's files for a flow deny this process access.
     bool permissionDenied(std::string const& domain, std::string const& flowId);
+
+    // The domain kept on the flow by mxlMonitoringCreateInstance.
+    std::string domainOf(Flow const& flow);
 
     // Why the domain cannot be used, or empty when it can. libmxl reports a
     // flow in a domain that went away after the instance was created as not

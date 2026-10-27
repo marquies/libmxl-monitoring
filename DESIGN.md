@@ -38,7 +38,7 @@ carries those dependencies only when it links that exporter.
 | --- | --- | --- |
 | Classification | every `mxlStatus` of an open, read or write -> access, read or write outcome | `mxlMonitoringClassify*` |
 | Content checks | format, resolution, rate, size, missing, invalid, incomplete, illegal values | the flow definition, `mxlGrainInfo`, the payload (`content.h`) |
-| Wrappers | libmxl reader calls that classify, time and check their own result and return the status unchanged | `reader.h` |
+| Wrappers | libmxl reader and writer calls that classify, time and check their own result and return the status unchanged | `reader.h`, `writer.h` |
 | Application reports | what no libmxl status carries: input late, out of space, invalid input | `mxlMonitoringRecordWriteOutcome`, `mxlMonitoringRecordWriteContent` |
 | Core model | per-flow counters and histograms, access state, last error, conditions | `monitoring.h` |
 | Snapshots and events | a copy of every flow's counts; started, persisting and recovered events | `mxlMonitoringSnapshot`, `mxlMonitoringPoll` |
@@ -99,7 +99,7 @@ Each rule exists because the plain count misleads:
 | TOO_EARLY does not count while the rate is unknown | without a rate there is no media timestamp to measure the grace against |
 | A stall counts once per stretch without data; reopening or retargeting the flow does not start a new one | a flow that stays dead across reopens is one outage |
 | A read failing for a reason other than timing sets access to permission denied or other until data moves or the flow is reopened | such a reader is unusable, and the access state should say so |
-| Out of space is reported by the caller | no libmxl status means a full domain; a writer has it from `errno == ENOSPC` |
+| Out of space is taken from `errno == ENOSPC` or a filesystem with no space left | no libmxl status means a full domain; the writer wrapper checks both after a failed create |
 
 The reader wrappers derive grace and stall timeout on every open from the
 flow, unless `mxlMonitoringSetFlowTiming` set them: data may land one read

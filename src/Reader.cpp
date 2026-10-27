@@ -21,12 +21,6 @@ namespace mxl::monitoring
             return NsPerSecond * static_cast<std::uint64_t>(rate.denominator) / static_cast<std::uint64_t>(rate.numerator);
         }
 
-        std::string domainOf(Flow const& flow)
-        {
-            auto const lock = std::lock_guard{flow.mutex};
-            return flow.domain;
-        }
-
         // Releases a reader that was opened but cannot be used, and records
         // why: nothing can be checked against a flow that is not described.
         mxlStatus abandon(Flow& flow, mxlInstance instance, mxlFlowReader* reader, mxlStatus status, std::string detail)

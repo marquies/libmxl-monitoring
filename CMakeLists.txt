@@ -33,6 +33,7 @@ target_sources(mxl-monitoring
             src/Events.cpp
             src/Monitoring.cpp
             src/Reader.cpp
+            src/Writer.cpp
     )
 target_compile_features(mxl-monitoring PUBLIC cxx_std_20)
 target_include_directories(mxl-monitoring
