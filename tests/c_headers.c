@@ -2,6 +2,7 @@
  * C++ accepts fails the build. */
 
 #include "mxl-monitoring/content.h"
+#include "mxl-monitoring/http.h"
 #include "mxl-monitoring/monitoring.h"
 #include "mxl-monitoring/prometheus.h"
 #include "mxl-monitoring/reader.h"

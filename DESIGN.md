@@ -204,6 +204,19 @@ Open failure reasons are `domain`, `not_found`, `permission` and `other`.
 Flow labels are escaped as the exposition format requires, never sanitised: a
 slot named `cam:video` stays `cam:video`.
 
+
+### HTTP endpoint
+
+`mxl-monitoring-http` serves the Prometheus text for a process that has no
+HTTP server of its own: GET `/metrics` and GET `/healthz`, nothing else. One
+thread answers one request at a time, without keep-alive, and reading a
+request and sending its answer each get 200 ms, so a client that sends nothing
+or reads slowly holds the next one up by that much at most. Stopping shuts the
+listening socket down, which wakes the thread at once. A process with a server
+of its own serves `mxlMonitoringPrometheusRender` from it instead; OTLP pushes
+to a collector and needs no server in the process, and an NMOS node brings its
+own.
+
 ### OpenTelemetry and NMOS
 
 Not implemented. The model is shaped so that both fit as further exporters
