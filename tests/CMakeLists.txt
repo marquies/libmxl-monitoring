@@ -10,6 +10,7 @@ target_sources(mxl-monitoring-tests
             test_concurrency.cpp
             test_content.cpp
             test_events.cpp
+            test_http.cpp
             test_prometheus.cpp
             test_reader.cpp
             test_recording.cpp
@@ -22,6 +23,7 @@ target_link_libraries(mxl-monitoring-tests
         PRIVATE
             mxl-monitoring
             mxl-monitoring-prometheus
+            mxl-monitoring-http
             Catch2::Catch2WithMain
     )
 target_include_directories(mxl-monitoring-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

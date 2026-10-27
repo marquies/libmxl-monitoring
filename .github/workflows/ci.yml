@@ -87,4 +87,4 @@ jobs:
                 -DCMAKE_TOOLCHAIN_FILE=/root/vcpkg/scripts/buildsystems/vcpkg.cmake \
                 -DCMAKE_PREFIX_PATH=/opt/libmxl
               cmake --build build
-              LD_LIBRARY_PATH=/opt/libmxl/lib build/tests/mxl-monitoring-tests "[concurrency],[recording],[events]"'
+              LD_LIBRARY_PATH=/opt/libmxl/lib build/tests/mxl-monitoring-tests "[concurrency],[recording],[events],[http]"'

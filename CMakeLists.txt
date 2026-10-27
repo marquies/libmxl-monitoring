@@ -52,7 +52,15 @@ add_library(mxl-monitoring::prometheus ALIAS mxl-monitoring-prometheus)
 target_sources(mxl-monitoring-prometheus PRIVATE src/Prometheus.cpp)
 target_link_libraries(mxl-monitoring-prometheus PUBLIC mxl-monitoring)
 
-foreach (target IN ITEMS mxl-monitoring mxl-monitoring-prometheus)
+# A minimal HTTP endpoint serving the Prometheus text, for a process that
+# serves no HTTP of its own.
+find_package(Threads REQUIRED)
+add_library(mxl-monitoring-http STATIC)
+add_library(mxl-monitoring::http ALIAS mxl-monitoring-http)
+target_sources(mxl-monitoring-http PRIVATE src/Http.cpp)
+target_link_libraries(mxl-monitoring-http PUBLIC mxl-monitoring-prometheus PRIVATE Threads::Threads)
+
+foreach (target IN ITEMS mxl-monitoring mxl-monitoring-prometheus mxl-monitoring-http)
     set_target_properties(${target}
             PROPERTIES
                 POSITION_INDEPENDENT_CODE ON
