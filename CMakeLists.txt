@@ -22,6 +22,9 @@ if (NOT TARGET picojson::picojson)
 endif ()
 
 option(MXL_MONITORING_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+# Needs opentelemetry-cpp with its OTLP/HTTP exporter, which vcpkg installs
+# with this repository's otlp manifest feature.
+option(MXL_MONITORING_OTLP "Build the OTLP exporter" OFF)
 
 # Static, so a process links it into itself and libmxl.so stays the only
 # library every process on a domain has to load identically.
@@ -60,7 +63,27 @@ add_library(mxl-monitoring::http ALIAS mxl-monitoring-http)
 target_sources(mxl-monitoring-http PRIVATE src/Http.cpp)
 target_link_libraries(mxl-monitoring-http PUBLIC mxl-monitoring-prometheus PRIVATE Threads::Threads)
 
-foreach (target IN ITEMS mxl-monitoring mxl-monitoring-prometheus mxl-monitoring-http)
+set(MXL_MONITORING_TARGETS mxl-monitoring mxl-monitoring-prometheus mxl-monitoring-http)
+if (MXL_MONITORING_OTLP)
+    find_package(opentelemetry-cpp CONFIG REQUIRED)
+    add_library(mxl-monitoring-otlp STATIC)
+    add_library(mxl-monitoring::otlp ALIAS mxl-monitoring-otlp)
+    target_sources(mxl-monitoring-otlp PRIVATE src/Otlp.cpp)
+    target_link_libraries(mxl-monitoring-otlp
+            PUBLIC
+                mxl-monitoring
+            PRIVATE
+                Threads::Threads
+                opentelemetry-cpp::otlp_http_metric_exporter
+                opentelemetry-cpp::otlp_http_log_record_exporter
+                opentelemetry-cpp::logs
+                opentelemetry-cpp::metrics
+                opentelemetry-cpp::resources
+        )
+    list(APPEND MXL_MONITORING_TARGETS mxl-monitoring-otlp)
+endif ()
+
+foreach (target IN ITEMS ${MXL_MONITORING_TARGETS})
     set_target_properties(${target}
             PROPERTIES
                 POSITION_INDEPENDENT_CODE ON

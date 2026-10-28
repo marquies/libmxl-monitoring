@@ -39,6 +39,10 @@ TEST_CASE("A read condition starts, persists and recovers", "[events]")
     CHECK(started.index == 71);
     CHECK(started.occurrences == 2);
     CHECK(started.content == MXL_MONITORING_CONTENT_COUNT);
+    INFO("an event says what the flow is, for a subscriber that has only the event");
+    CHECK(started.version == 3);
+    CHECK(started.format == MXL_DATA_FORMAT_VIDEO);
+    CHECK(started.unit == MXL_MONITORING_UNIT_GRAIN);
 
     INFO("recurring within the interval adds no event");
     for (int i = 0; i < 59; ++i)
@@ -246,4 +250,27 @@ TEST_CASE("A caller recording by hand describes its own conditions", "[events]")
             CHECK(std::string{event.detail} == "v210 code 0 at row 1");
         }
     }
+}
+
+TEST_CASE("An unsubscribed callback receives no further events", "[events]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    auto other = std::vector<mxlMonitoringEvent>{};
+    auto const fn = [](mxlMonitoringEvent const* event, void* user)
+    {
+        static_cast<std::vector<mxlMonitoringEvent>*>(user)->push_back(*event);
+    };
+    REQUIRE(mxlMonitoringSubscribe(context.monitoring, fn, &other) == MXL_STATUS_OK);
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, 70, 1);
+    mxlMonitoringPoll(context.monitoring);
+    CHECK(other.size() == 1);
+
+    REQUIRE(mxlMonitoringUnsubscribe(context.monitoring, fn, &other) == MXL_STATUS_OK);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_FLOW_NOT_FOUND, MXL_ERR_FLOW_NOT_FOUND);
+    mxlMonitoringPoll(context.monitoring);
+    CHECK(other.size() == 1);
+    INFO("the other subscriber keeps receiving");
+    CHECK(context.events.size() == 2);
+    CHECK(mxlMonitoringUnsubscribe(context.monitoring, fn, &other) == MXL_ERR_INVALID_ARG);
 }

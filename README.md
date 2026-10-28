@@ -41,10 +41,13 @@ increments atomics. `DESIGN.md` gives the reasons behind these rules.
 | | `mxl-monitoring/writer.h` | libmxl writer calls that record their own outcome |
 | `mxl-monitoring-prometheus` | `mxl-monitoring/prometheus.h` | text exposition for `/metrics` |
 | `mxl-monitoring-http` | `mxl-monitoring/http.h` | an endpoint serving `/metrics` and `/healthz`, for a process without an HTTP server |
+| `mxl-monitoring-otlp` | `mxl-monitoring/otlp.h` | metrics and events pushed over OTLP/HTTP to an OpenTelemetry Collector; built with `-DMXL_MONITORING_OTLP=ON` |
 
-Readers are exported under `mxl_reader_*`, with the names and label values
-`mxl-reader` serves; writers under `mxl_writer_*`; replication under
-`mxl_gateway_source_*` and `mxl_gateway_target_*`.
+In Prometheus text, readers are exported under `mxl_reader_*`, with the names
+and label values `mxl-reader` serves; writers under `mxl_writer_*`;
+replication under `mxl_gateway_source_*` and `mxl_gateway_target_*`. Over
+OTLP, readers and writers are exported under the `mxl.*` names of
+[DESIGN.md](DESIGN.md#opentelemetry), replication not yet.
 
 ## Use
 
@@ -66,6 +69,22 @@ if (mxlMonitoringCreateFlowReader(flow, instance, "", &reader) == MXL_STATUS_OK)
 
 mxlMonitoringPoll(monitoring);   /* from one thread, more often than once a second */
 mxlMonitoringPrometheusRender(monitoring, buffer, &size);
+```
+
+The OTLP exporter reads its configuration from the standard `OTEL_*`
+environment variables, so a chart sets them and no code carries an address:
+
+```c
+mxlMonitoringOtlp otlp;
+mxlMonitoringOtlpStart(monitoring, "mxl-reader", &otlp);  /* service.name unless OTEL_* set one */
+/* ... */
+mxlMonitoringOtlpStop(otlp);
+```
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=http://$NODE_IP:4318
+OTEL_METRIC_EXPORT_INTERVAL=5000
+OTEL_RESOURCE_ATTRIBUTES=dmf.media_function=clip-player-1
 ```
 
 The wrappers take the arguments of the libmxl function they are named after and
@@ -98,6 +117,19 @@ cmake -S . -B build -G Ninja \
 cmake --build build
 LD_LIBRARY_PATH=/opt/libmxl/lib build/tests/mxl-monitoring-tests
 ```
+
+The OTLP exporter needs opentelemetry-cpp with its OTLP/HTTP exporter, which
+the manifest's `otlp` feature installs:
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DCMAKE_PREFIX_PATH=/opt/libmxl \
+  -DVCPKG_MANIFEST_FEATURES=otlp -DMXL_MONITORING_OTLP=ON
+```
+
+Inside a dmf-mxl/mxl checkout, vcpkg installs from that checkout's manifest,
+which does not list opentelemetry-cpp; the consumer provides it.
 
 `ghcr.io/qvest-digital/go-mxl-builder` carries libmxl under `/opt/libmxl` and
 the vcpkg toolchain; CI builds both ways in it and runs the concurrency tests

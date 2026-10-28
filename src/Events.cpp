@@ -35,7 +35,7 @@ namespace mxl::monitoring
                 mxlStatus status, std::uint64_t index, std::uint64_t occurrences)
             {
                 auto event = mxlMonitoringEvent{};
-                event.version = 2;
+                event.version = 3;
                 event.size = sizeof(mxlMonitoringEvent);
                 event.timeNs = now;
                 copyText(flow.id, event.flowId, sizeof(event.flowId));
@@ -55,6 +55,8 @@ namespace mxl::monitoring
                 event.total = c.total;
                 event.durationNs = since(now, c.startedAt);
                 copyText(detail(kind, outcome, content), event.detail, sizeof(event.detail));
+                event.format = static_cast<mxlDataFormat>(flow.format.load(Relaxed));
+                event.unit = static_cast<mxlMonitoringUnit>(flow.unit.load(Relaxed));
                 for (auto const& s : monitoring.subscribers)
                 {
                     s.fn(&event, s.user);
@@ -184,6 +186,20 @@ extern "C"
         {
             return MXL_ERR_UNKNOWN;
         }
+    }
+
+    mxlStatus mxlMonitoringUnsubscribe(mxlMonitoring monitoring, mxlMonitoringEventFn fn, void* user)
+    {
+        auto* const m = toMonitoring(monitoring);
+        if (m == nullptr)
+        {
+            return MXL_ERR_INVALID_ARG;
+        }
+        // Subscribers run under the poll lock, so holding it waits out a
+        // delivery in progress.
+        auto const lock = std::lock_guard{m->pollMutex};
+        auto const removed = std::erase_if(m->subscribers, [&](Subscriber const& s) { return s.fn == fn && s.user == user; });
+        return removed != 0 ? MXL_STATUS_OK : MXL_ERR_INVALID_ARG;
     }
 
     mxlStatus mxlMonitoringPoll(mxlMonitoring monitoring)

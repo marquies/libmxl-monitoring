@@ -350,7 +350,7 @@ extern "C"
 
     typedef struct mxlMonitoringEvent_t
     {
-        uint32_t version; // 2
+        uint32_t version; // 3
         uint32_t size;    // sizeof(mxlMonitoringEvent)
 
         uint64_t timeNs;
@@ -374,6 +374,9 @@ extern "C"
         uint64_t total;       // since STARTED
         uint64_t durationNs;  // since STARTED
         char detail[MXL_MONITORING_TEXT];
+        // What the flow is, as far as known when the event was made.
+        mxlDataFormat format;
+        mxlMonitoringUnit unit;
     } mxlMonitoringEvent;
 
     typedef void (*mxlMonitoringEventFn)(mxlMonitoringEvent const* event, void* user);
@@ -383,6 +386,10 @@ extern "C"
     // into the context, and a slow one holds up mxlMonitoringRemoveFlow and
     // mxlMonitoringSubscribe, though never recording.
     mxlStatus mxlMonitoringSubscribe(mxlMonitoring monitoring, mxlMonitoringEventFn fn, void* user);
+    // Removes the subscription of fn with user. Once it returns, fn is not
+    // running and is not called again, so user may be freed. Not from fn.
+    // MXL_ERR_INVALID_ARG where there is no such subscription.
+    mxlStatus mxlMonitoringUnsubscribe(mxlMonitoring monitoring, mxlMonitoringEventFn fn, void* user);
 
     // Advances every condition to now and delivers the resulting events. Call
     // from one thread, more often than recoverDelayNs; a notification is late
