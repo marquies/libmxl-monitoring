@@ -357,6 +357,12 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     CHECK(intValue(*state) == "1");
     CHECK(point(m.at("mxl.flow.open.failures"), withAttribute("mxl.open.failure", "flow_not_found")));
     CHECK(point(m.at("mxl.reader.delivering"), flow));
+    INFO("a gauge of unit 1 would reach Prometheus with _ratio appended");
+    auto unit = [&](char const* name) { return at(m.at(name).json, "unit").get<std::string>(); };
+    CHECK(unit("mxl.flow.state") == "{state}");
+    CHECK(unit("mxl.reader.delivering") == "{flow}");
+    CHECK(unit("mxl.writer.delivering") == "{flow}");
+    CHECK(unit("mxl.writer.head") == "{index}");
 
     REQUIRE(m.contains("mxl.reader.arrival.latency"));
     auto const arrival = point(m.at("mxl.reader.arrival.latency"), flow);

@@ -248,7 +248,7 @@ namespace
             auto const a = static_cast<mxlMonitoringAccess>(access);
             batch.gauge("mxl.flow.state",
                 "1 for the state the flow is in.",
-                "1",
+                "{state}",
                 with(base, "mxl.flow.state", mxlMonitoringAccessName(a)),
                 static_cast<std::int64_t>(s.access == a ? 1 : 0));
         }
@@ -299,7 +299,7 @@ namespace
                 content("mxl.reader.reads", reads, "mxl.read.result", "invalid_content");
                 batch.counter("mxl.reader.skipped", "Grains or samples jumped over to reach the head again.", "1", base, s.skipped);
                 batch.counter("mxl.reader.stalls", "Read timeouts that passed with no read at all.", "{timeout}", base, s.stalls);
-                batch.gauge("mxl.reader.delivering", "1 while reads land within a second.", "1", base, static_cast<std::int64_t>(s.delivering));
+                batch.gauge("mxl.reader.delivering", "1 while reads land within a second.", "{flow}", base, static_cast<std::int64_t>(s.delivering));
                 batch.histogram("mxl.reader.arrival.latency", "Read time minus the media timestamp of what was read.", base, s.arrivalLatency);
                 batch.histogram("mxl.reader.commit.latency", "Commit time minus the media timestamp, for reads of the head.", base, s.commitLatency);
                 if (s.lastDataTimeNs != 0)
@@ -324,12 +324,12 @@ namespace
                     }
                 }
                 content("mxl.writer.writes", writes, "mxl.write.result", "invalid_input");
-                batch.gauge("mxl.writer.delivering", "1 while commits land within a second.", "1", base, static_cast<std::int64_t>(s.delivering));
+                batch.gauge("mxl.writer.delivering", "1 while commits land within a second.", "{flow}", base, static_cast<std::int64_t>(s.delivering));
                 batch.histogram("mxl.writer.commit.latency", "Commit time minus the media timestamp of what was committed.", base, s.commitLatency);
                 batch.histogram("mxl.writer.input.latency", "Input arrival minus the media timestamp it is written at.", base, s.inputLatency);
                 if (s.lastDataTimeNs != 0)
                 {
-                    batch.gauge("mxl.writer.head", "Index of the last grain or sample written.", "1", base, static_cast<std::int64_t>(s.lastIndex));
+                    batch.gauge("mxl.writer.head", "Index of the last grain or sample written.", "{index}", base, static_cast<std::int64_t>(s.lastIndex));
                 }
                 break;
             }

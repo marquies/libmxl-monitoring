@@ -235,17 +235,17 @@ costs the points of that interval, never a count.
 
 | Metric | Type | Attributes besides the flow's | Roles |
 | --- | --- | --- | --- |
-| `mxl.flow.state` | gauge | `mxl.flow.state`: the access names | reader, writer |
+| `mxl.flow.state` | gauge, `{state}` | `mxl.flow.state`: the access names | reader, writer |
 | `mxl.flow.open.failures` | counter | `mxl.open.failure`: `domain_unavailable`, `flow_not_found`, `permission_denied`, `flow_invalid`, `other` | reader, writer |
 | `mxl.flow.opens`, `mxl.flow.reopens` | counter | | reader, writer |
 | `mxl.reader.reads` | counter | `mxl.read.result`: `ok`, `too_early`, `too_late`, `permission_denied`, `read_error`, `invalid_content` with `mxl.content.issue` | reader |
 | `mxl.reader.skipped`, `mxl.reader.stalls` | counter | | reader |
-| `mxl.reader.delivering` | gauge | | reader |
+| `mxl.reader.delivering` | gauge, `{flow}` | | reader |
 | `mxl.reader.age` | gauge, `s` | | reader |
 | `mxl.reader.arrival.latency`, `mxl.reader.commit.latency` | histogram, `s` | | reader |
 | `mxl.writer.writes` | counter | `mxl.write.result`: `ok`, `input_late`, `permission_denied`, `out_of_space`, `write_error`, `invalid_input` with `mxl.content.issue` | writer |
-| `mxl.writer.delivering` | gauge | | writer |
-| `mxl.writer.head` | gauge | | writer |
+| `mxl.writer.delivering` | gauge, `{flow}` | | writer |
+| `mxl.writer.head` | gauge, `{index}` | | writer |
 | `mxl.writer.commit.latency`, `mxl.writer.input.latency` | histogram, `s` | | writer |
 
 Every point carries `mxl.flow.id`, and once the flow is open
@@ -253,9 +253,10 @@ Every point carries `mxl.flow.id`, and once the flow is open
 (`grain`, `sample`). Content issues are counted per issue and never as a total
 beside them, so a sum over the result is the number of reads or writes.
 Counters have unit `1`: an instrument has one unit, and a flow's unit is its
-attribute. `mxl.status` is not on metric points, since a snapshot keeps only
-the last status of a flow, not one per outcome; events carry it. Replication
-roles are not exported yet.
+attribute. No gauge has unit `1`, which Prometheus would name with a `_ratio`
+suffix. `mxl.status` is not on metric points, since a snapshot keeps only the
+last status of a flow, not one per outcome; events carry it. Replication roles
+are not exported yet.
 
 Each event is one log record with an event name, `mxl.flow.open_failed`,
 `mxl.flow.open_failing` and `mxl.flow.opened` for access, `mxl.reader.read_failed`
