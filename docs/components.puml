@@ -1,0 +1,40 @@
+@startuml
+title libmxl-monitoring - Components
+skinparam componentStyle rectangle
+left to right direction
+
+package "Process reading or writing MXL flows" {
+  [Media loop\nreads / writes MXL flows] as Loop
+  package "mxl-monitoring (static)" {
+    [Wrappers\nreader.h / writer.h] as Wrap
+    [Content checks\ncontent.h] as Content
+    [Core model\nmonitoring.h\nflows, counters,\nsnapshots, events] as Core
+  }
+  package "Exporters (static, optional)" {
+    [mxl-monitoring-prometheus\ntext exposition] as Prom
+    [mxl-monitoring-http\nGET /metrics, /healthz] as Http
+    [mxl-monitoring-otlp\nOTLP/HTTP push] as Otlp
+  }
+}
+[libmxl.so] as Mxl
+cloud "Prometheus\n(scrapes)" as PromBackend
+cloud "OTel Collector" as Collector
+
+Loop --> Wrap : libmxl calls
+Wrap --> Mxl : forwards unchanged
+Wrap --> Content : check grains / samples
+Wrap --> Core : record outcome\n(atomics, never blocks)
+Loop --> Core : mxlMonitoringPoll\n(one thread)
+Prom --> Core : snapshot
+Http --> Prom : render
+Otlp --> Core : snapshot + events
+Http --> PromBackend : text format
+Otlp --> Collector : OTLP/HTTP
+
+note bottom of Core
+  One context per process,
+  one flow handle per flow.
+  Recording touches only its
+  own flow's atomics.
+end note
+@enduml

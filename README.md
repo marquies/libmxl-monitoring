@@ -29,7 +29,8 @@ of access, not as a failed read.
 Each failure is a condition with three events: started, persisting (once a
 minute while it recurs) and recovered. The events come from comparing the
 counters between calls to `mxlMonitoringPoll`, so recording itself only
-increments atomics. `DESIGN.md` gives the reasons behind these rules.
+increments atomics. `DESIGN.md` gives the reasons behind these rules, and
+[docs/architecture.md](docs/architecture.md) shows the parts on one page.
 
 ## Libraries
 
