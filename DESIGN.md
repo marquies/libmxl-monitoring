@@ -158,7 +158,8 @@ so a wrong format and illegal values notify separately. Each condition emits:
 One event per change instead of one per grain: at 50 grains a second a
 per-grain event floods whatever receives it. An event carries the last libmxl
 status, the last affected index, occurrences since the previous event, the
-total and duration since started, and a text. Recovery requires good data and
+total and duration since started, a text, and the flow's format and unit, so
+a subscriber needs nothing but the event. Recovery requires good data and
 delivering so that a condition does not recover merely because its failing
 calls stopped, for example while the process waits to reopen.
 
@@ -218,19 +219,61 @@ of its own serves `mxlMonitoringPrometheusRender` from it instead; OTLP pushes
 to a collector and needs no server in the process, and an NMOS node brings its
 own.
 
-### OpenTelemetry and NMOS
+### OpenTelemetry
 
-Not implemented. The model is shaped so that both fit as further exporters
-over the same snapshots and events:
+`mxl-monitoring-otlp` pushes over OTLP/HTTP with opentelemetry-cpp, configured
+only through the standard `OTEL_*` environment variables. gRPC is not built:
+it would add gRPC to every image linking the exporter, and a Collector takes
+both.
 
-- OTLP: counters, gauges and histograms read from snapshots as observable
-  instruments, events as log records, configured through the standard
-  `OTEL_*` environment variables, built on opentelemetry-cpp as its own
-  target.
-- NMOS BCP-008: link, connection and stream status of the receiver and sender
-  monitors derived from access, delivering and the read or write outcomes.
-  BCP-008 has the device judge its own health, so that judgement belongs in
-  the core, shared by every exporter, rather than in this exporter alone.
+Metrics are built from snapshots on the exporter's own thread every
+`OTEL_METRIC_EXPORT_INTERVAL` and handed to the SDK's OTLP exporter as
+finished data points, cumulative from the exporter's start. The SDK's
+instruments do not fit: it has no asynchronous histogram, and the snapshot
+already holds every histogram complete. A Collector that cannot be reached
+costs the points of that interval, never a count.
+
+| Metric | Type | Attributes besides the flow's | Roles |
+| --- | --- | --- | --- |
+| `mxl.flow.state` | gauge | `mxl.flow.state`: the access names | reader, writer |
+| `mxl.flow.open.failures` | counter | `mxl.open.failure`: `domain_unavailable`, `flow_not_found`, `permission_denied`, `flow_invalid`, `other` | reader, writer |
+| `mxl.flow.opens`, `mxl.flow.reopens` | counter | | reader, writer |
+| `mxl.reader.reads` | counter | `mxl.read.result`: `ok`, `too_early`, `too_late`, `permission_denied`, `read_error`, `invalid_content` with `mxl.content.issue` | reader |
+| `mxl.reader.skipped`, `mxl.reader.stalls` | counter | | reader |
+| `mxl.reader.delivering` | gauge | | reader |
+| `mxl.reader.age` | gauge, `s` | | reader |
+| `mxl.reader.arrival.latency`, `mxl.reader.commit.latency` | histogram, `s` | | reader |
+| `mxl.writer.writes` | counter | `mxl.write.result`: `ok`, `input_late`, `permission_denied`, `out_of_space`, `write_error`, `invalid_input` with `mxl.content.issue` | writer |
+| `mxl.writer.delivering` | gauge | | writer |
+| `mxl.writer.head` | gauge | | writer |
+| `mxl.writer.commit.latency`, `mxl.writer.input.latency` | histogram, `s` | | writer |
+
+Every point carries `mxl.flow.id`, and once the flow is open
+`mxl.flow.media_type` (`video`, `audio`, `data`, `event`) and `mxl.flow.unit`
+(`grain`, `sample`). Content issues are counted per issue and never as a total
+beside them, so a sum over the result is the number of reads or writes.
+Counters have unit `1`: an instrument has one unit, and a flow's unit is its
+attribute. `mxl.status` is not on metric points, since a snapshot keeps only
+the last status of a flow, not one per outcome; events carry it. Replication
+roles are not exported yet.
+
+Each event is one log record with an event name, `mxl.flow.open_failed`,
+`mxl.flow.open_failing` and `mxl.flow.opened` for access, `mxl.reader.read_failed`
+and `mxl.reader.read_recovered`, `mxl.writer.write_failed` and
+`mxl.writer.write_recovered`; severity WARN for `too_early`, `too_late` and
+`input_late`, ERROR for other failures, INFO for a recovery; a one-sentence
+body; and the flow's attributes with the outcome, `mxl.content.issue`,
+`mxl.event.phase`, `mxl.status`, `mxl.grain.index`, `mxl.occurrences`,
+`mxl.total` and `mxl.duration`. Records leave through the SDK's batch
+processor, so delivering an event never waits on the network.
+
+### NMOS
+
+Not implemented. BCP-008's receiver and sender monitors would take their
+link, connection and stream status from access, delivering and the read or
+write outcomes. BCP-008 has the device judge its own health, so that judgement
+belongs in the core, shared by every exporter, rather than in this exporter
+alone.
 
 ## What libmxl does not provide
 

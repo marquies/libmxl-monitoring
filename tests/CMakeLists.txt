@@ -27,3 +27,8 @@ target_link_libraries(mxl-monitoring-tests
             Catch2::Catch2WithMain
     )
 target_include_directories(mxl-monitoring-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+if (MXL_MONITORING_OTLP)
+    target_sources(mxl-monitoring-tests PRIVATE test_otlp.cpp)
+    target_link_libraries(mxl-monitoring-tests PRIVATE mxl-monitoring-otlp picojson::picojson)
+endif ()

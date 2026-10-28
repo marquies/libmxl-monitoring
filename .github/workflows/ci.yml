@@ -26,16 +26,25 @@ env:
   VCPKG_DEFAULT_BINARY_CACHE: /root/.cache/vcpkg/archives
 
 jobs:
+  # With the OTLP exporter, whose opentelemetry-cpp the image does not carry:
+  # vcpkg builds it once per manifest into a cache of this workflow's own.
   standalone:
     runs-on: ubuntu-latest
     container: ghcr.io/qvest-digital/go-mxl-builder:1.1.0-rc.7
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .vcpkg-otlp
+          key: vcpkg-otlp-${{ hashFiles('vcpkg.json') }}
       - name: Configure
         run: >
+          mkdir -p .vcpkg-otlp &&
+          VCPKG_BINARY_SOURCES="clear;default,read;files,$PWD/.vcpkg-otlp,readwrite"
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_TOOLCHAIN_FILE=/root/vcpkg/scripts/buildsystems/vcpkg.cmake
           -DCMAKE_PREFIX_PATH=/opt/libmxl
+          -DVCPKG_MANIFEST_FEATURES=otlp -DMXL_MONITORING_OTLP=ON
       - name: Build
         run: cmake --build build
       - name: Test

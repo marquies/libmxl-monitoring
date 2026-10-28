@@ -4,6 +4,7 @@
 #include "mxl-monitoring/content.h"
 #include "mxl-monitoring/http.h"
 #include "mxl-monitoring/monitoring.h"
+#include "mxl-monitoring/otlp.h"
 #include "mxl-monitoring/prometheus.h"
 #include "mxl-monitoring/reader.h"
 #include "mxl-monitoring/writer.h"
