@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/marquies/libmxl-monitoring/compare/v0.3.0...v0.4.0) (2026-10-28)
+
+
+### Features
+
+* export metrics and events over OTLP/HTTP ([#11](https://github.com/marquies/libmxl-monitoring/issues/11)) ([226822c](https://github.com/marquies/libmxl-monitoring/commit/226822c91ac3108da6264c9cb85a96ea2811d5eb))
+
 ## [0.3.0](https://github.com/marquies/libmxl-monitoring/compare/v0.2.0...v0.3.0) (2026-10-27)
 
 
