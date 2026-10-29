@@ -1,5 +1,9 @@
 # libmxl-monitoring
 
+[![CI](https://github.com/marquies/libmxl-monitoring/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/marquies/libmxl-monitoring/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/marquies/libmxl-monitoring)](https://github.com/marquies/libmxl-monitoring/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 A media function that reads or writes [MXL](https://github.com/dmf-mxl/mxl)
 flows gets a status from every libmxl call and nothing more: no count of how
 often a flow was out of reach, read too early or too late, or written without
