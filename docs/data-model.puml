@@ -1,0 +1,61 @@
+@startuml
+title Data model - what external services receive
+skinparam classAttributeIconSize 0
+hide empty methods
+
+package "Core model (monitoring.h)" {
+  class mxlMonitoringFlowSnapshot <<per flow>> {
+    flowId, target, role
+    unit, format, rate, mediaType
+    access, accessFailures[], opens, losses
+    reads[], writes[], content[]
+    skipped, stalls
+    lastErrorStatus / Index / Time / Detail
+    formatMismatch
+    arrivalLatency, commitLatency, inputLatency
+    lastIndex, ageNs, delivering
+  }
+  class mxlMonitoringEvent <<per condition change>> {
+    timeNs, flowId, role
+    kind, phase, outcome, content
+    status, index
+    occurrences, total, durationNs
+    detail, format, unit
+  }
+}
+
+package "Prometheus (pull, text)" {
+  class "Metric families\n<prefix>_*" as Prom {
+    prefix per role: mxl_reader,
+    mxl_writer, mxl_gateway_*
+    labels: flow + state / result /
+    issue / reason / le
+  }
+}
+
+package "OTel Collector (push, OTLP/HTTP)" {
+  class "Metric points\nmxl.flow.* / mxl.reader.* / mxl.writer.*" as OtlpM {
+    cumulative, every export interval
+    attrs: mxl.flow.id, media_type, unit
+    + mxl.read.result / mxl.write.result /
+    mxl.open.failure / mxl.content.issue
+  }
+  class "Log records\nmxl.*.{failed, failing, recovered, opened}" as OtlpL {
+    severity: WARN / ERROR / INFO
+    body: one-sentence detail
+    attrs: outcome, phase, status,
+    grain index, occurrences,
+    total, duration
+  }
+}
+
+mxlMonitoringFlowSnapshot --> Prom : mxlMonitoringPrometheusRender
+mxlMonitoringFlowSnapshot --> OtlpM : built on the exporter's\nthread from snapshots
+mxlMonitoringEvent --> OtlpL : one record per event,\nvia the batch processor
+
+note bottom of mxlMonitoringEvent
+  Produced by mxlMonitoringPoll from
+  counter diffs: started, persisting
+  (rate-limited), recovered.
+end note
+@enduml
