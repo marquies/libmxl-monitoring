@@ -66,7 +66,8 @@ OTLP, readers and writers are exported under the `mxl.*` names of
 [docs/hello-world.md](docs/hello-world.md) builds and runs a first reader, and
 [docs/tutorial.md](docs/tutorial.md) a writer and a reader through access
 failures, events and content checks; their programs are in
-[examples/](examples/). In short:
+[examples/](examples/). [mxl-reader](https://github.com/marquies/dmf-mf-mxl-reader)
+is a complete media function built on the library. In short:
 
 ```c
 mxlMonitoring monitoring;

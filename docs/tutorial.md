@@ -168,3 +168,14 @@ records, to a collector the standard `OTEL_*` variables name; it is a target
 of its own, built with `-DMXL_MONITORING_OTLP=ON`, and not used by these
 examples (see [Use](../README.md#use)). [data-model.md](data-model.md) lists
 what each exporter sends.
+
+## A complete media function
+
+[mxl-reader](https://github.com/marquies/dmf-mf-mxl-reader) is what the
+tutorial's reader becomes in production: it reads every grain or batch of
+samples of each flow it is given through the reader wrappers, checks the
+content against an expectation per flow, and serves the counts as `/metrics`,
+`/status` as JSON and a live view of each flow's ring. As an NMOS Node it
+gives each flow a Receiver a controller connects over IS-05, and moves the
+flow handle with `mxlMonitoringSetFlowTarget`, so a Receiver keeps its name
+and its counts while the flow it reads changes.
