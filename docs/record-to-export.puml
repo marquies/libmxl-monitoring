@@ -1,0 +1,33 @@
+@startuml
+title From a failed read to metrics and events
+autonumber
+participant "Media loop" as Loop
+participant "Wrapper\n(reader.h)" as Wrap
+participant "libmxl" as Mxl
+participant "Core model" as Core
+participant "Polling thread" as Poll
+participant "Subscriber /\nOTLP logs" as Sub
+participant "Exporter\n(Prometheus / OTLP)" as Exp
+
+Loop -> Wrap : mxlMonitoringFlowReaderGetGrain(...)
+Wrap -> Mxl : mxlFlowReaderGetGrain(...)
+Mxl --> Wrap : MXL_ERR_OUT_OF_RANGE_TOO_LATE
+Wrap -> Core : classify + record\n(relaxed atomics only)
+Wrap --> Loop : status unchanged
+
+== one thread, more often than the recover delay ==
+Poll -> Core : mxlMonitoringPoll
+Core -> Core : diff counters vs previous poll
+alt condition changed
+  Core -> Sub : event: started /\npersisting / recovered
+end
+
+== exporter's own schedule ==
+Exp -> Core : mxlMonitoringSnapshot
+Exp -> Exp : render text /\nbuild OTLP points
+
+note over Core, Poll
+  One event per condition change, never per grain.
+  The hot path carries no event state.
+end note
+@enduml
