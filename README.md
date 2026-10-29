@@ -1,11 +1,21 @@
 # libmxl-monitoring
 
-Monitoring for processes that read or write [MXL](https://github.com/dmf-mxl/mxl)
-flows. A process records what happened to each flow it uses: whether the
+A media function that reads or writes [MXL](https://github.com/dmf-mxl/mxl)
+flows gets a status from every libmxl call and nothing more: no count of how
+often a flow was out of reach, read too early or too late, or written without
+its input in time, and no check that the content is what the flow declares.
+AMWA's [IN-004](https://specs.amwa.tv/in-004/latest/Overview/) (Flow Connection
+Phase 2 Requirements and Gaps, work in progress) asks for monitoring of MXL
+writers, readers and replication: notification of these errors, counters of
+them and of correct operation, and latency, over IS-12, OpenTelemetry or
+ST 2138. This library provides it for readers and writers; replication is not
+exported yet.
+
+A process records what happened to each flow it uses: whether the
 domain and the flow could be reached, the outcome of every read or write, and
 whether the content was what it should be. The library counts it, measures
 latency against the grains' media timestamps, turns failures into rate-limited
-events, and renders it all for Prometheus.
+events, and exports it all as Prometheus text or over OTLP.
 
 It is a C API, implemented in C++20, built as static libraries against libmxl.
 Linking it statically leaves `libmxl.so` the only library every process on a

@@ -7,6 +7,8 @@ are the reference for every call.
 
 Diagrams: [components](components.puml),
 [record-to-export sequence](record-to-export.puml).
+[data-model.md](data-model.md) details what Prometheus and the OTel
+Collector receive.
 
 ## The idea in one paragraph
 
