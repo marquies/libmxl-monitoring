@@ -63,6 +63,11 @@ OTLP, readers and writers are exported under the `mxl.*` names of
 
 ## Use
 
+[docs/hello-world.md](docs/hello-world.md) builds and runs a first reader, and
+[docs/tutorial.md](docs/tutorial.md) a writer and a reader through access
+failures, events and content checks; their programs are in
+[examples/](examples/). In short:
+
 ```c
 mxlMonitoring monitoring;
 mxlMonitoringCreate(NULL, &monitoring);

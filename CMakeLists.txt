@@ -22,6 +22,7 @@ if (NOT TARGET picojson::picojson)
 endif ()
 
 option(MXL_MONITORING_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+option(MXL_MONITORING_BUILD_EXAMPLES "Build the programs of docs/hello-world.md and docs/tutorial.md" ${PROJECT_IS_TOP_LEVEL})
 # Needs opentelemetry-cpp with its OTLP/HTTP exporter, which vcpkg installs
 # with this repository's otlp manifest feature.
 option(MXL_MONITORING_OTLP "Build the OTLP exporter" OFF)
@@ -93,6 +94,9 @@ foreach (target IN ITEMS ${MXL_MONITORING_TARGETS})
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
 endforeach ()
 
+if (MXL_MONITORING_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif ()
 if (MXL_MONITORING_BUILD_TESTS)
     add_subdirectory(tests)
 endif ()
