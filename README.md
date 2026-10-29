@@ -8,8 +8,9 @@ AMWA's [IN-004](https://specs.amwa.tv/in-004/latest/Overview/) (Flow Connection
 Phase 2 Requirements and Gaps, work in progress) asks for monitoring of MXL
 writers, readers and replication: notification of these errors, counters of
 them and of correct operation, and latency, over IS-12, OpenTelemetry or
-ST 2138. This library provides it for readers and writers; replication is not
-exported yet.
+ST 2138. This library provides it for readers and writers. For replication it
+has the roles, which the Prometheus text renders; the OTLP exporter does not
+export them yet.
 
 A process records what happened to each flow it uses: whether the
 domain and the flow could be reached, the outcome of every read or write, and
@@ -145,6 +146,42 @@ which does not list opentelemetry-cpp; the consumer provides it.
 `ghcr.io/qvest-digital/go-mxl-builder` carries libmxl under `/opt/libmxl` and
 the vcpkg toolchain; CI builds both ways in it and runs the concurrency tests
 under ThreadSanitizer as well. The reader tests need a writable `/dev/shm`.
+
+## Roadmap
+
+Released:
+
+| Version | What it added |
+| --- | --- |
+| 0.1 | the core model, the reader wrappers, the content checks and the Prometheus text |
+| 0.2 | a flow handle reported under a name of its own, so a reader slot keeps its counts while the flow it reads changes |
+| 0.3 | the writer wrappers, and `/metrics` and `/healthz` for a process without an HTTP server |
+| 0.4 | the OTLP/HTTP exporter: metrics and the events as log records |
+
+Planned, in no fixed order:
+
+- **BCP-008 mapping**: the statuses and counters of an AMWA BCP-008
+  `NcReceiverMonitor` and `NcSenderMonitor`, worked out from a flow's
+  snapshots: link, connection or transmission, synchronization, and stream or
+  essence, with the lost, late and transmission error counters and their
+  reset. It carries no NMOS dependency; an application hands the statuses to
+  the IS-12 implementation of its Node.
+- **Health evaluator**: thresholds and reporting delays from a configuration
+  file, deciding a flow's health, which every exporter then exports.
+- **Replication**: the source and target roles exist and the Prometheus text
+  renders them with their read and write outcomes. Planned are the outcomes of
+  the copy itself, which a gateway records around its own copy of a flow since
+  no wrapper applies, and their export under `mxl.replication.*` over OTLP.
+- **Go binding**: a `go/` module binding the C API through cgo, linking the
+  static libraries and leaving libmxl to the Go side, so a gateway written in
+  Go records and exports with the same names and rules.
+
+Changes to libmxl that would let the library do more with less are candidates
+to propose to [dmf-mxl/mxl](https://github.com/dmf-mxl/mxl), not
+prerequisites: a status of its own for a full domain, which today the writer
+wrappers infer from `errno` or the domain's free space; an observer hook reporting every read, write and open with its
+status, which would make the wrappers unnecessary; and transfer counters in
+libmxl-fabrics for replication.
 
 ## License
 
