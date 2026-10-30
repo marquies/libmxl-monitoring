@@ -324,6 +324,30 @@ TEST_CASE("Ids are names up to the length a snapshot carries", "[recording]")
     CHECK(mxlMonitoringAddFlow(context.monitoring, tooLong.c_str(), MXL_MONITORING_ROLE_WRITER, &flow) == MXL_ERR_INVALID_ARG);
 }
 
+TEST_CASE("Every read and write outcome and content issue has its OTLP name", "[recording]")
+{
+    auto const read = [](mxlMonitoringRead r) { return std::string{mxlMonitoringReadName(r)}; };
+    CHECK(read(MXL_MONITORING_READ_OK) == "ok");
+    CHECK(read(MXL_MONITORING_READ_TOO_EARLY) == "too_early");
+    CHECK(read(MXL_MONITORING_READ_TOO_LATE) == "too_late");
+    CHECK(read(MXL_MONITORING_READ_PERMISSION_DENIED) == "permission_denied");
+    CHECK(read(MXL_MONITORING_READ_ERROR) == "read_error");
+    CHECK(read(MXL_MONITORING_READ_INVALID_CONTENT) == "invalid_content");
+    CHECK(read(MXL_MONITORING_READ_COUNT) == "unknown");
+    auto const write = [](mxlMonitoringWrite w) { return std::string{mxlMonitoringWriteName(w)}; };
+    CHECK(write(MXL_MONITORING_WRITE_OK) == "ok");
+    CHECK(write(MXL_MONITORING_WRITE_INPUT_LATE) == "input_late");
+    CHECK(write(MXL_MONITORING_WRITE_INVALID_INPUT) == "invalid_input");
+    CHECK(write(MXL_MONITORING_WRITE_PERMISSION_DENIED) == "permission_denied");
+    CHECK(write(MXL_MONITORING_WRITE_OUT_OF_SPACE) == "out_of_space");
+    CHECK(write(MXL_MONITORING_WRITE_ERROR) == "write_error");
+    CHECK(write(MXL_MONITORING_WRITE_COUNT) == "unknown");
+    CHECK(std::string{mxlMonitoringContentName(MXL_MONITORING_CONTENT_WRONG_FORMAT)} == "wrong_format");
+    CHECK(std::string{mxlMonitoringContentName(MXL_MONITORING_CONTENT_ILLEGAL_VALUES)} == "illegal_values");
+    INFO("the count stands for no issue, which has no name");
+    CHECK(mxlMonitoringContentName(MXL_MONITORING_CONTENT_COUNT) == nullptr);
+}
+
 TEST_CASE("Every access state has mxl-reader's name", "[recording]")
 {
     CHECK(std::string{mxlMonitoringAccessName(MXL_MONITORING_ACCESS_STARTING)} == "starting");

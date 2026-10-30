@@ -33,10 +33,9 @@ static void onEvent(mxlMonitoringEvent const* event, void* user)
 {
     (void)user;
     static char const* const phases[] = {"started", "persisting", "recovered"};
-    static char const* const reads[] = {"ok", "too_early", "too_late", "permission_denied", "read_error", "invalid_content"};
     char const* const condition = event->kind == MXL_MONITORING_CONDITION_ACCESS ? mxlMonitoringAccessName(event->access)
-                                : event->kind == MXL_MONITORING_CONDITION_READ   ? reads[event->read]
-                                                                                 : "write";
+                                : event->kind == MXL_MONITORING_CONDITION_READ   ? mxlMonitoringReadName(event->read)
+                                                                                 : mxlMonitoringWriteName(event->write);
     printf("event %-10s %s, %llu occurrence(s)%s%s\n", phases[event->phase], condition, (unsigned long long)event->total,
         event->detail[0] != '\0' ? ": " : "", event->detail);
     fflush(stdout);
