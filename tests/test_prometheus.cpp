@@ -96,6 +96,8 @@ TEST_CASE("A reader's exposition is mxl-reader's, followed by its latencies", "[
     CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"0.002\"} 0"));
     CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"0.005\"} 1"));
     CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"0.04\"} 4"));
+    CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"2.56\"} 4"));
+    CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"81.92\"} 4"));
     CHECK(contains(text, "mxl_reader_arrival_seconds_bucket{flow=\"" + id + "\",le=\"+Inf\"} 4"));
     CHECK(contains(text, "mxl_reader_arrival_seconds_sum{flow=\"" + id + "\"} 0.072000"));
     CHECK(contains(text, "mxl_reader_arrival_seconds_count{flow=\"" + id + "\"} 4"));

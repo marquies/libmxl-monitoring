@@ -84,6 +84,24 @@ TEST_CASE("A latency on a bucket bound falls in that bucket, as Prometheus le is
     CHECK(s.arrivalLatency.buckets[5] == 0);
 }
 
+TEST_CASE("A latency of seconds keeps its magnitude, only one past 81.92 s is out of range", "[recording]")
+{
+    // A source stamping from a clock of its own runs tens of seconds behind;
+    // a quantile above the last bound reads as that bound, so the tail has to
+    // reach that far for a dashboard to show it.
+    auto context = Context{};
+    auto const flow = context.open();
+    auto const index = context.dueIndex();
+    context.now += 44'800 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, index, 1);
+    context.now += 40'000 * Ms;
+    mxlMonitoringRecordRead(flow, MXL_STATUS_OK, index + 1, 1);
+    auto const s = context.snapshot();
+    CHECK(mxlMonitoringLatencyBound(16) == 81'920 * Ms);
+    CHECK(s.arrivalLatency.buckets[16] == 1); // 44.8 s: above 40.96 s, within 81.92 s
+    CHECK(s.arrivalLatency.buckets[MXL_MONITORING_LATENCY_BUCKETS - 1] == 1); // 84.78 s
+}
+
 TEST_CASE("Too early counts once per index, and only past the grace", "[recording]")
 {
     auto context = Context{};

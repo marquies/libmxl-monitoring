@@ -18,8 +18,8 @@ values: [DESIGN.md](../DESIGN.md#exporters).
 (`unit`, `format`, `rate`, `mediaType`), access state and failure counts,
 `opens` and `losses`, read/write outcome counters, content issue counters,
 `skipped`, `stalls`, the last error (status, index, time, text),
-`formatMismatch`, three latency histograms (arrival, commit, input; 12 fixed
-buckets, 1 ms to 1.28 s), `lastIndex`, `ageNs` and `delivering`.
+`formatMismatch`, three latency histograms (arrival, commit, input; 18 fixed
+buckets, 1 ms to 81.92 s), `lastIndex`, `ageNs` and `delivering`.
 
 **Event** (per condition change): `timeNs`, `flowId`, `role`, condition
 (`kind` + access/read/write outcome + content issue), `phase`, last libmxl

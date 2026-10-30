@@ -138,7 +138,9 @@ hides the faults it exists to find.
 | input | writer: input arrival minus the media timestamp it is written at |
 
 Bucket bounds are 1, 2, 5, 10, 20, 40, 80, 160, 320, 640 and 1280 ms, then
-one bucket above. Nothing is observed while the rate is unknown. Negative
+doubling on to 81.92 s, then one bucket above. The long tail is there for
+timestamps far from the reader's clock, such as a source stamping from a clock
+of its own: a quantile that falls above the last bound reads as that bound. Nothing is observed while the rate is unknown. Negative
 latencies, from clocks apart between nodes, count as 0. Arrival and commit on
 a reader use the reader node's clock, so their difference is free of clock
 offset between nodes.
