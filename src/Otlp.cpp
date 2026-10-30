@@ -90,50 +90,6 @@ namespace
         }
     }
 
-    char const* contentName(mxlMonitoringContent content)
-    {
-        switch (content)
-        {
-            case MXL_MONITORING_CONTENT_WRONG_FORMAT:     return "wrong_format";
-            case MXL_MONITORING_CONTENT_WRONG_RESOLUTION: return "wrong_resolution";
-            case MXL_MONITORING_CONTENT_WRONG_RATE:       return "wrong_rate";
-            case MXL_MONITORING_CONTENT_WRONG_SIZE:       return "wrong_size";
-            case MXL_MONITORING_CONTENT_MISSING:          return "missing";
-            case MXL_MONITORING_CONTENT_INVALID:          return "invalid";
-            case MXL_MONITORING_CONTENT_INCOMPLETE:       return "incomplete";
-            case MXL_MONITORING_CONTENT_ILLEGAL_VALUES:   return "illegal_values";
-            default:                                      return nullptr;
-        }
-    }
-
-    char const* readName(mxlMonitoringRead read)
-    {
-        switch (read)
-        {
-            case MXL_MONITORING_READ_OK:                return "ok";
-            case MXL_MONITORING_READ_TOO_EARLY:         return "too_early";
-            case MXL_MONITORING_READ_TOO_LATE:          return "too_late";
-            case MXL_MONITORING_READ_PERMISSION_DENIED: return "permission_denied";
-            case MXL_MONITORING_READ_ERROR:             return "read_error";
-            case MXL_MONITORING_READ_INVALID_CONTENT:   return "invalid_content";
-            default:                                    return "read_error";
-        }
-    }
-
-    char const* writeName(mxlMonitoringWrite write)
-    {
-        switch (write)
-        {
-            case MXL_MONITORING_WRITE_OK:                return "ok";
-            case MXL_MONITORING_WRITE_INPUT_LATE:        return "input_late";
-            case MXL_MONITORING_WRITE_INVALID_INPUT:     return "invalid_input";
-            case MXL_MONITORING_WRITE_PERMISSION_DENIED: return "permission_denied";
-            case MXL_MONITORING_WRITE_OUT_OF_SPACE:      return "out_of_space";
-            case MXL_MONITORING_WRITE_ERROR:             return "write_error";
-            default:                                     return "write_error";
-        }
-    }
-
     // mxl.open.failure: the reasons an attempt to reach a flow fails.
     char const* openFailureName(mxlMonitoringAccess access)
     {
@@ -274,7 +230,7 @@ namespace
             for (auto issue = 0; issue < MXL_MONITORING_CONTENT_COUNT; ++issue)
             {
                 auto attributes = with(base, resultKey, result);
-                attributes.SetAttribute("mxl.content.issue", contentName(static_cast<mxlMonitoringContent>(issue)));
+                attributes.SetAttribute("mxl.content.issue", mxlMonitoringContentName(static_cast<mxlMonitoringContent>(issue)));
                 batch.counter(name, description, "1", std::move(attributes), s.content[issue]);
             }
         };
@@ -292,7 +248,7 @@ namespace
                         batch.counter("mxl.reader.reads",
                             reads,
                             "1",
-                            with(base, "mxl.read.result", readName(static_cast<mxlMonitoringRead>(read))),
+                            with(base, "mxl.read.result", mxlMonitoringReadName(static_cast<mxlMonitoringRead>(read))),
                             s.reads[read]);
                     }
                 }
@@ -319,7 +275,7 @@ namespace
                         batch.counter("mxl.writer.writes",
                             writes,
                             "1",
-                            with(base, "mxl.write.result", writeName(static_cast<mxlMonitoringWrite>(write))),
+                            with(base, "mxl.write.result", mxlMonitoringWriteName(static_cast<mxlMonitoringWrite>(write))),
                             s.writes[write]);
                     }
                 }
@@ -380,11 +336,15 @@ namespace
     // timing conditions do not.
     std::string body(mxlMonitoringEvent const& e)
     {
-        auto const id = std::string_view{e.flowId}.substr(0, 8);
+        // A flow id that is a UUID is known by its first eight digits; any
+        // other, such as a reader slot's name, is kept whole.
+        auto const full = std::string_view{e.flowId};
+        auto const uuid = full.size() == 36 && full[8] == '-' && full[13] == '-' && full[18] == '-' && full[23] == '-';
+        auto const id = uuid ? full.substr(0, 8) : full;
         auto const outcome = e.kind == MXL_MONITORING_CONDITION_ACCESS ? openFailureName(e.access)
-                           : e.kind == MXL_MONITORING_CONDITION_READ   ? readName(e.read)
-                                                                       : writeName(e.write);
-        auto const* issue = contentName(e.content);
+                           : e.kind == MXL_MONITORING_CONDITION_READ   ? mxlMonitoringReadName(e.read)
+                                                                       : mxlMonitoringWriteName(e.write);
+        auto const* issue = mxlMonitoringContentName(e.content);
         auto text = std::format("flow {} {}{}{}", id, outcome, issue != nullptr ? " " : "", issue != nullptr ? issue : "");
         switch (e.phase)
         {
@@ -487,10 +447,10 @@ struct mxlMonitoringOtlp_t
         switch (e.kind)
         {
             case MXL_MONITORING_CONDITION_ACCESS: record->SetAttribute("mxl.open.failure", openFailureName(e.access)); break;
-            case MXL_MONITORING_CONDITION_READ:   record->SetAttribute("mxl.read.result", readName(e.read)); break;
-            case MXL_MONITORING_CONDITION_WRITE:  record->SetAttribute("mxl.write.result", writeName(e.write)); break;
+            case MXL_MONITORING_CONDITION_READ:   record->SetAttribute("mxl.read.result", mxlMonitoringReadName(e.read)); break;
+            case MXL_MONITORING_CONDITION_WRITE:  record->SetAttribute("mxl.write.result", mxlMonitoringWriteName(e.write)); break;
         }
-        if (auto const* issue = contentName(e.content))
+        if (auto const* issue = mxlMonitoringContentName(e.content))
         {
             record->SetAttribute("mxl.content.issue", issue);
         }

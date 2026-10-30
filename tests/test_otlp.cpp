@@ -389,6 +389,26 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     }));
 }
 
+TEST_CASE("A log record names a flow by the first digits of a UUID and by a slot name whole", "[otlp]")
+{
+    auto collector = Collector{};
+    configure(collector);
+    auto context = Context{};
+    auto const slot = context.open(MXL_MONITORING_ROLE_READER, "monitor:video");
+    auto otlp = mxlMonitoringOtlp{};
+    REQUIRE(mxlMonitoringOtlpStart(context.monitoring, "mxl-test", &otlp) == MXL_STATUS_OK);
+
+    deliver(context, slot, 10);
+    mxlMonitoringPoll(context.monitoring);
+    mxlMonitoringRecordRead(slot, MXL_ERR_OUT_OF_RANGE_TOO_LATE, 70, 1);
+    mxlMonitoringPoll(context.monitoring);
+    mxlMonitoringOtlpStop(otlp);
+
+    auto const records = logRecords(collector);
+    REQUIRE(records.size() == 1);
+    CHECK(text(at(records[0], "body")) == "flow monitor:video too_late, 1 occurrence(s)");
+}
+
 TEST_CASE("A too_late burst is exported as the log records of its events", "[otlp]")
 {
     auto collector = Collector{};

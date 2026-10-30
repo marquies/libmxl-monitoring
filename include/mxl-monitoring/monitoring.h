@@ -107,6 +107,18 @@ extern "C"
         MXL_MONITORING_CONTENT_COUNT,
     } mxlMonitoringContent;
 
+    // One word per read outcome, write outcome and content issue, as the OTLP
+    // exporter names them: ok, too_early, too_late, permission_denied,
+    // read_error, invalid_content; ok, input_late, invalid_input,
+    // permission_denied, out_of_space, write_error; wrong_format,
+    // wrong_resolution, wrong_rate, wrong_size, missing, invalid, incomplete,
+    // illegal_values. The Prometheus text keeps the names mxl-reader's
+    // /metrics had. mxlMonitoringContentName returns NULL for
+    // MXL_MONITORING_CONTENT_COUNT, which stands for no issue.
+    char const* mxlMonitoringReadName(mxlMonitoringRead read);
+    char const* mxlMonitoringWriteName(mxlMonitoringWrite write);
+    char const* mxlMonitoringContentName(mxlMonitoringContent content);
+
     // What a libmxl status means for each kind of call.
     //
     // MXL_ERR_FLOW_NOT_FOUND, MXL_ERR_FLOW_INVALID, MXL_ERR_INVALID_FLOW_READER

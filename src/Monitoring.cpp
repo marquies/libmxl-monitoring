@@ -475,6 +475,53 @@ extern "C"
         return "unknown";
     }
 
+    char const* mxlMonitoringContentName(mxlMonitoringContent content)
+    {
+        switch (content)
+        {
+            case MXL_MONITORING_CONTENT_WRONG_FORMAT:     return "wrong_format";
+            case MXL_MONITORING_CONTENT_WRONG_RESOLUTION: return "wrong_resolution";
+            case MXL_MONITORING_CONTENT_WRONG_RATE:       return "wrong_rate";
+            case MXL_MONITORING_CONTENT_WRONG_SIZE:       return "wrong_size";
+            case MXL_MONITORING_CONTENT_MISSING:          return "missing";
+            case MXL_MONITORING_CONTENT_INVALID:          return "invalid";
+            case MXL_MONITORING_CONTENT_INCOMPLETE:       return "incomplete";
+            case MXL_MONITORING_CONTENT_ILLEGAL_VALUES:   return "illegal_values";
+            case MXL_MONITORING_CONTENT_COUNT:            break;
+        }
+        return nullptr;
+    }
+
+    char const* mxlMonitoringReadName(mxlMonitoringRead read)
+    {
+        switch (read)
+        {
+            case MXL_MONITORING_READ_OK:                return "ok";
+            case MXL_MONITORING_READ_TOO_EARLY:         return "too_early";
+            case MXL_MONITORING_READ_TOO_LATE:          return "too_late";
+            case MXL_MONITORING_READ_PERMISSION_DENIED: return "permission_denied";
+            case MXL_MONITORING_READ_ERROR:             return "read_error";
+            case MXL_MONITORING_READ_INVALID_CONTENT:   return "invalid_content";
+            case MXL_MONITORING_READ_COUNT:             break;
+        }
+        return "unknown";
+    }
+
+    char const* mxlMonitoringWriteName(mxlMonitoringWrite write)
+    {
+        switch (write)
+        {
+            case MXL_MONITORING_WRITE_OK:                return "ok";
+            case MXL_MONITORING_WRITE_INPUT_LATE:        return "input_late";
+            case MXL_MONITORING_WRITE_INVALID_INPUT:     return "invalid_input";
+            case MXL_MONITORING_WRITE_PERMISSION_DENIED: return "permission_denied";
+            case MXL_MONITORING_WRITE_OUT_OF_SPACE:      return "out_of_space";
+            case MXL_MONITORING_WRITE_ERROR:             return "write_error";
+            case MXL_MONITORING_WRITE_COUNT:             break;
+        }
+        return "unknown";
+    }
+
     mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
         char const* detail)
     {
