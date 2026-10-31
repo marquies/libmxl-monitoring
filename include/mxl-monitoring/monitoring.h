@@ -258,8 +258,9 @@ extern "C"
     uint64_t mxlMonitoringFlowLastProgress(mxlMonitoringFlow flow);
 
     // Upper bounds in seconds: 0.001 0.002 0.005 0.01 0.02 0.04 0.08 0.16
-    // 0.32 0.64 1.28, then one bucket for everything above.
-#define MXL_MONITORING_LATENCY_BUCKETS 12
+    // 0.32 0.64 1.28 2.56 5.12 10.24 20.48 40.96 81.92, then one bucket for
+    // everything above.
+#define MXL_MONITORING_LATENCY_BUCKETS 18
 
     typedef struct mxlMonitoringHistogram_t
     {

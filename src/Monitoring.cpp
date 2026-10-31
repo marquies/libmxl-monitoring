@@ -13,7 +13,8 @@ namespace mxl::monitoring
     {
         constexpr std::uint64_t Ms = 1'000'000ULL;
         constexpr std::array<std::uint64_t, MXL_MONITORING_LATENCY_BUCKETS - 1> Bounds = {
-            1 * Ms, 2 * Ms, 5 * Ms, 10 * Ms, 20 * Ms, 40 * Ms, 80 * Ms, 160 * Ms, 320 * Ms, 640 * Ms, 1280 * Ms};
+            1 * Ms, 2 * Ms, 5 * Ms, 10 * Ms, 20 * Ms, 40 * Ms, 80 * Ms, 160 * Ms, 320 * Ms, 640 * Ms, 1280 * Ms,
+            2560 * Ms, 5120 * Ms, 10240 * Ms, 20480 * Ms, 40960 * Ms, 81920 * Ms};
 
         constexpr auto Relaxed = std::memory_order_relaxed;
 
