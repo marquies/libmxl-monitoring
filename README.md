@@ -157,6 +157,31 @@ which does not list opentelemetry-cpp; the consumer provides it.
 the vcpkg toolchain; CI builds both ways in it and runs the concurrency tests
 under ThreadSanitizer as well. The reader tests need a writable `/dev/shm`.
 
+## Go
+
+`github.com/marquies/libmxl-monitoring/go` binds flows, recording, snapshots
+and the Prometheus text through cgo, and `.../go/otlp` the OTLP exporter.
+libmxl is left to [go-mxl](https://github.com/qvest-digital/go-mxl): the
+binding takes its errors, finds the libmxl status in them, and links no
+libmxl of its own. A Go process records what go-mxl returns, since the
+wrappers need the C handles go-mxl keeps to itself:
+
+```go
+m, _ := mxlmonitoring.New()
+flow, _ := m.AddFlow(flowID, mxlmonitoring.RoleReader)
+
+reader, err := instance.NewReader(flowID)
+flow.RecordAccess(err)
+grain, err := reader.GetGrain(index, timeout)
+flow.RecordRead(err, index, 1)
+
+exporter, _ := otlp.Start(m, "my-function")
+```
+
+The static libraries are found through `CGO_LDFLAGS`, which also carries
+opentelemetry-cpp for `go/otlp`; its package documentation gives the flags,
+and the Go test step of `.github/workflows/ci.yml` uses them.
+
 ## Roadmap
 
 Released:
@@ -182,9 +207,9 @@ Planned, in no fixed order:
   renders them with their read and write outcomes. Planned are the outcomes of
   the copy itself, which a gateway records around its own copy of a flow since
   no wrapper applies, and their export under `mxl.replication.*` over OTLP.
-- **Go binding**: a `go/` module binding the C API through cgo, linking the
-  static libraries and leaving libmxl to the Go side, so a gateway written in
-  Go records and exports with the same names and rules.
+- **Go events**: subscribing to events from Go. The Go binding records,
+  snapshots and exports; events reach a collector only through the OTLP
+  exporter.
 
 Changes to libmxl that would let the library do more with less are candidates
 to propose to [dmf-mxl/mxl](https://github.com/dmf-mxl/mxl), not

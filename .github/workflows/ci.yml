@@ -51,6 +51,16 @@ jobs:
         run: build/tests/mxl-monitoring-tests
         env:
           LD_LIBRARY_PATH: /opt/libmxl/lib
+      # The Go binding against the libraries just built, OTLP included. The
+      # flags are the ones go/otlp documents for a consumer.
+      - name: Go test
+        run: |
+          export PKG_CONFIG_PATH="/opt/libmxl/lib/pkgconfig:$PWD/build/vcpkg_installed/x64-linux/lib/pkgconfig"
+          export CGO_LDFLAGS="-L$PWD/build -Wl,--start-group -lmxl-monitoring-otlp -lmxl-monitoring-prometheus -lmxl-monitoring -lopentelemetry_http_client_curl $(pkg-config --static --libs opentelemetry_exporter_otlp_http_metric opentelemetry_exporter_otlp_http_log libcurl) -lstdc++ -Wl,--end-group"
+          go vet ./go/...
+          go test ./go/...
+        env:
+          LD_LIBRARY_PATH: /opt/libmxl/lib
 
   in-tree:
     runs-on: ubuntu-latest
