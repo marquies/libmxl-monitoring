@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/marquies/libmxl-monitoring/compare/v0.4.0...v0.5.0) (2026-10-31)
+
+
+### Features
+
+* bind the C API for Go ([#19](https://github.com/marquies/libmxl-monitoring/issues/19)) ([4fe8d2f](https://github.com/marquies/libmxl-monitoring/commit/4fe8d2f91881d835ef5d598f289189c31d407ff7))
+* extend the latency buckets to 81.92 s ([#18](https://github.com/marquies/libmxl-monitoring/issues/18)) ([e4130b0](https://github.com/marquies/libmxl-monitoring/commit/e4130b027495d08545cb93b1fe39e4a5d8439163))
+* name read and write outcomes and content issues ([#16](https://github.com/marquies/libmxl-monitoring/issues/16)) ([216d86a](https://github.com/marquies/libmxl-monitoring/commit/216d86a39a9fa30d9c347580c2049a268bcd49c4))
+
 ## [0.4.0](https://github.com/marquies/libmxl-monitoring/compare/v0.3.0...v0.4.0) (2026-10-28)
 
 
