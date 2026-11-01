@@ -272,11 +272,62 @@ processor, so delivering an event never waits on the network.
 
 ### NMOS
 
-Not implemented. BCP-008's receiver and sender monitors would take their
-link, connection and stream status from access, delivering and the read or
-write outcomes. BCP-008 has the device judge its own health, so that judgement
-belongs in the core, shared by every exporter, rather than in this exporter
-alone.
+`bcp008.h`, in the core, decides what an AMWA BCP-008 monitor reports for a
+flow: an `NcReceiverMonitor` for a reader or replication source, an
+`NcSenderMonitor` for a writer or replication target. It reads snapshots and
+nothing else, so it carries no NMOS dependency, and a Node that polls another
+process's counts fills snapshots from them and gets the same judgement.
+
+The IS-12 implementation of the Node holds the monitor object and does what
+BCP-008 asks of the object rather than of the judgement: it delays reports by
+`statusReportingDelay`, counts status transitions, derives `overallStatus`,
+and turns a monitor `Inactive` on deactivation. The library hands it domain
+statuses and counters.
+
+Statuses are judged on what was counted between two snapshots, the previous
+poll's and the current one. A fault counted before the previous poll has
+been reported once; judging on totals would hold a monitor unhealthy for the
+rest of the process's life. Counts are read as well as states, because a
+failure the flow recovered from within the interval, a failed read, a loss
+and reopen or a stall shorter than a second, has left no state by the time
+of the poll. A domain nothing in the interval decides, such as the stream of
+a reader that read nothing, is reported unchanged: no data says nothing
+about whether data decodes.
+
+| Domain | Receiver | Sender |
+| --- | --- | --- |
+| link | AllDown while the MXL domain is unavailable, the flow's only link; AllUp otherwise | same |
+| connection or transmission | Unhealthy while not open or not delivering, or for a loss, a stall, a failed read, grains lost (skipped, missing) or late reads (too early past the grace) | Unhealthy while not open or not delivering, or for a loss, a stall or a failed commit |
+| synchronization | NotUsed: media timestamps come from the node's own clock | same |
+| stream or essence | Unhealthy for wrong format, wrong size or invalid; PartiallyHealthy for wrong resolution, wrong rate, incomplete or illegal values | Unhealthy for invalid input or no input in time at all, PartiallyHealthy for some input late |
+
+A disconnected flow is Inactive in connection and stream. BCP-008 calls a
+stream Unhealthy when it cannot be decoded and PartiallyHealthy when it
+decodes but differs from what was expected; that line separates the content
+issues. A missing grain was never written, so it counts against the
+connection as lost, not against the stream, and reading only missing grains
+leaves the stream unchanged. On a sender, a grain written without input in
+time carries no essence: with none in time at all the sender has no essence,
+which BCP-008 calls Unhealthy; with some, the essence is there with gaps.
+
+BCP-008 calls lost what never arrived and late what arrived too late to be
+used. To a reader, a grain the ring overtook it on never arrived, whatever
+the writer did, so skipped counts as lost, as does missing; a read that found
+its grain not there a grace period past its media timestamp is late, and it
+counts in reads, since the core counts too early once per read index.
+
+Counters come from a baseline snapshot, the one a Node keeps at the monitor's
+last reset: lost and late as above, and transmission errors as the failed
+commits by outcome. Input late and invalid input belong to the essence, not
+the transmission. A kind the flow's side does not have is empty, which is how
+BCP-008 answers a device without that capability.
+
+Counts never go down within a process. A Node that polls another process's
+counts sees them go down when that process starts again, and then takes
+every count of the current snapshot as new, in statuses and counters alike.
+That holds only while some count is still below the baseline, so the Node
+checks each poll with `mxlMonitoringBcp008Restarted` and drops a counter
+baseline from before a restart.
 
 ## What libmxl does not provide
 

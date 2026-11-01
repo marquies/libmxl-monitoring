@@ -55,6 +55,7 @@ increments atomics. `DESIGN.md` gives the reasons behind these rules, and
 | | `mxl-monitoring/content.h` | flow definitions, expectations, grain and sample checks |
 | | `mxl-monitoring/reader.h` | libmxl reader calls that record their own outcome |
 | | `mxl-monitoring/writer.h` | libmxl writer calls that record their own outcome |
+| | `mxl-monitoring/bcp008.h` | the statuses and counters of a flow's AMWA BCP-008 receiver or sender monitor, for the IS-12 implementation of a Node |
 | `mxl-monitoring-prometheus` | `mxl-monitoring/prometheus.h` | text exposition for `/metrics` |
 | `mxl-monitoring-http` | `mxl-monitoring/http.h` | an endpoint serving `/metrics` and `/healthz`, for a process without an HTTP server |
 | `mxl-monitoring-otlp` | `mxl-monitoring/otlp.h` | metrics and events pushed over OTLP/HTTP to an OpenTelemetry Collector; built with `-DMXL_MONITORING_OTLP=ON` |
@@ -192,15 +193,10 @@ Released:
 | 0.2 | a flow handle reported under a name of its own, so a reader slot keeps its counts while the flow it reads changes |
 | 0.3 | the writer wrappers, and `/metrics` and `/healthz` for a process without an HTTP server |
 | 0.4 | the OTLP/HTTP exporter: metrics and the events as log records |
+| 0.5 | the Go binding, names for every outcome and content issue, and latency buckets up to 81.92 s |
 
 Planned, in no fixed order:
 
-- **BCP-008 mapping**: the statuses and counters of an AMWA BCP-008
-  `NcReceiverMonitor` and `NcSenderMonitor`, worked out from a flow's
-  snapshots: link, connection or transmission, synchronization, and stream or
-  essence, with the lost, late and transmission error counters and their
-  reset. It carries no NMOS dependency; an application hands the statuses to
-  the IS-12 implementation of its Node.
 - **Health evaluator**: thresholds and reporting delays from a configuration
   file, deciding a flow's health, which every exporter then exports.
 - **Replication**: the source and target roles exist and the Prometheus text

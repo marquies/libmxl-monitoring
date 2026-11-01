@@ -1,6 +1,7 @@
 /* The public headers are a C API: compiled here as C11, so a construct only
  * C++ accepts fails the build. */
 
+#include "mxl-monitoring/bcp008.h"
 #include "mxl-monitoring/content.h"
 #include "mxl-monitoring/http.h"
 #include "mxl-monitoring/monitoring.h"
