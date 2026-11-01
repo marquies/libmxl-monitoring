@@ -194,6 +194,7 @@ Released:
 | 0.3 | the writer wrappers, and `/metrics` and `/healthz` for a process without an HTTP server |
 | 0.4 | the OTLP/HTTP exporter: metrics and the events as log records |
 | 0.5 | the Go binding, names for every outcome and content issue, and latency buckets up to 81.92 s |
+| 0.6 | AMWA BCP-008 statuses and counters for a flow, judged from two snapshots, for the monitors an IS-12 Node holds |
 
 Planned, in no fixed order:
 
