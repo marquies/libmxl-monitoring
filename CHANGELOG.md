@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/marquies/libmxl-monitoring/compare/v0.5.0...v0.6.0) (2026-11-01)
+
+
+### Features
+
+* report a flow's BCP-008 monitor statuses and counters ([#20](https://github.com/marquies/libmxl-monitoring/issues/20)) ([14e516e](https://github.com/marquies/libmxl-monitoring/commit/14e516e5d2cad8696c2f6a506f6fce60965178b4))
+
 ## [0.5.0](https://github.com/marquies/libmxl-monitoring/compare/v0.4.0...v0.5.0) (2026-10-31)
 
 
