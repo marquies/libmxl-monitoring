@@ -33,6 +33,7 @@ add_library(mxl-monitoring STATIC)
 add_library(mxl-monitoring::mxl-monitoring ALIAS mxl-monitoring)
 target_sources(mxl-monitoring
         PRIVATE
+            src/Bcp008.cpp
             src/Content.cpp
             src/Events.cpp
             src/Monitoring.cpp

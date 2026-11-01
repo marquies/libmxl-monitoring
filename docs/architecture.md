@@ -26,6 +26,7 @@ I/O runs elsewhere.
 | Core model: flows, counters, snapshots, events | `mxl-monitoring` | `monitoring.h`, `Monitoring.cpp`, `Flow.hpp`, `Events.cpp` |
 | Content checks against the flow definition | `mxl-monitoring` | `content.h`, `Content.cpp` |
 | libmxl wrappers that record their own outcome | `mxl-monitoring` | `reader.h`/`Reader.cpp`, `writer.h`/`Writer.cpp` |
+| BCP-008 monitor statuses and counters from snapshots | `mxl-monitoring` | `bcp008.h`, `Bcp008.cpp` |
 | Prometheus text exposition | `mxl-monitoring-prometheus` | `prometheus.h`, `Prometheus.cpp` |
 | Minimal `/metrics` + `/healthz` endpoint | `mxl-monitoring-http` | `http.h`, `Http.cpp` |
 | OTLP/HTTP push exporter (optional) | `mxl-monitoring-otlp` | `otlp.h`, `Otlp.cpp` |

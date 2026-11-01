@@ -6,6 +6,7 @@ add_executable(mxl-monitoring-tests)
 target_sources(mxl-monitoring-tests
         PRIVATE
             c_headers.c
+            test_bcp008.cpp
             test_classify.cpp
             test_concurrency.cpp
             test_content.cpp
