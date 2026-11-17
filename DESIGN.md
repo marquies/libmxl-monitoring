@@ -329,6 +329,89 @@ That holds only while some count is still below the baseline, so the Node
 checks each poll with `mxlMonitoringBcp008Restarted` and drops a counter
 baseline from before a restart.
 
+## Health
+
+Status: design, not implemented.
+
+The NMOS judgement reaches only an IS-12 Node. Prometheus and OTLP carry the
+counts, and every dashboard and alert rule decides on its own what makes a
+flow unhealthy. The core judges each flow once, with the rules of the NMOS
+section, and every exporter publishes that judgement.
+
+### Judgement
+
+A flow's health is the worst of its domain statuses, as BCP-008 derives
+`overallStatus`: Inactive while the flow is disconnected, Healthy only while
+every domain is Healthy or NotUsed, and a link AllDown counts as Unhealthy.
+The domain statuses are those of `mxlMonitoringBcp008GetStatuses`; the core
+calls the same code, so a Node and an exporter never disagree on a rule.
+
+The core judges at every poll, on the counts since the start of the current
+window: one second, the span `delivering` already uses. At the end of a
+window the current snapshot becomes the next window's start. A poll judges a
+partial window, so a fault is seen at the poll after it, not a second later.
+A domain the window does not decide, reported unchanged, keeps the status
+the core last judged for it.
+
+### Limits
+
+The NMOS rules tolerate nothing: one lost grain or one late read makes the
+connection Unhealthy. A reader that the ring overtakes once an hour then
+flaps. Limits make some of that tolerable:
+
+| Limit | Applies to | Unit |
+| --- | --- | --- |
+| `lost` | receiver connection: skipped and missing | share of the grains or samples read in the window |
+| `late` | receiver connection: too early past the grace | share of the reads in the window |
+| `inputLate` | sender essence: input late | share of the writes in the window |
+
+A count at or below its limit judges as if it were zero; above it, as the
+rules say. Losses, stalls, failed reads and commits, out of space and every
+content issue keep no limit: each is a fault, however rare. A share rather
+than a count per window keeps a limit independent of the rate and the window.
+
+Every limit is 0 by default, which is the NMOS judgement as it is. The limits
+are a field of `mxlMonitoringConfig` for the core, and an argument of a
+variant of `mxlMonitoringBcp008GetStatuses` for a Node, so a Node judging
+with the same limits reports what the exporters report. The library reads no
+file; a media function fills them from its own configuration.
+
+### Writes without input
+
+A sender that fills a gap in its input, with black, silence or a repeated
+grain, still commits a grain. Today only an `ok` write counts as data that
+moved, so a sender recording a fill as `input_late` alone stops delivering
+and its transmission turns Unhealthy; to stay delivering it records the fill
+as `ok` and as `input_late`, and a sender with no input at all then reads
+PartiallyHealthy, as if some input had arrived.
+
+An `input_late` write counts as data that moved, as `ok` does, and a sender
+records a fill as `input_late` only. A sender without input then reads
+transmission Healthy, since it commits every grain, and essence Unhealthy,
+since none of them carries input; one with gaps reads PartiallyHealthy. The
+counts stay as they are, so `ok` keeps meaning a grain written from input.
+
+### Reporting delay
+
+BCP-008 reports a change to a less healthy status at once, and a change to a
+healthier one only once it has held for `statusReportingDelay`, 3 s by
+default. The core applies the same rule to the health it exports, with
+`healthDelayNs` in the configuration, 0 meaning 3 s, so a dashboard sees what
+a controller sees. `mxlMonitoringBcp008GetStatuses` stays undelayed: the
+Node holds the monitor object and applies the delay itself, and a second
+delay would double it.
+
+### Export
+
+| Exporter | Form |
+| --- | --- |
+| snapshot | `health`, the delayed status, and `healthChangedNs`; snapshot version 3, which the NMOS calls accept beside version 2 |
+| Prometheus | `<prefix>_flow_health{flow,status}`, one series per status with 1 for the current one, as `flow_state` |
+| OTLP | `mxl.flow.health`, gauge, attribute `mxl.flow.health` with the status name |
+| events | none: a flow turns less healthy through a condition, which emits its own event |
+
+Status names: `inactive`, `healthy`, `partially_healthy`, `unhealthy`.
+
 ## What libmxl does not provide
 
 | Gap | Effect here |
