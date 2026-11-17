@@ -54,7 +54,7 @@ int main(int argc, char** argv)
     mxlFlowReader reader;
     if (instance == NULL || mxlMonitoringCreateFlowReader(flow, instance, "", &reader) != MXL_STATUS_OK)
     {
-        fprintf(stderr, "cannot open flow %s in %s; curl localhost:%u/metrics says why\n", flowId, domain, port);
+        fprintf(stderr, "cannot open flow %s in %s\n", flowId, domain);
         return 1;
     }
     mxlFlowInfo info;

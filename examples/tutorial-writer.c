@@ -65,7 +65,7 @@ int main(int argc, char** argv)
     bool created;
     if (instance == NULL || mxlMonitoringCreateFlowWriter(flow, instance, FlowDef, "", &writer, &config, &created) != MXL_STATUS_OK)
     {
-        fprintf(stderr, "cannot create flow %s in %s; curl localhost:%u/metrics says why\n", FLOW_ID, domain, port);
+        fprintf(stderr, "cannot create flow %s in %s\n", FLOW_ID, domain);
         return 1;
     }
     mxlRational const rate = config.common.grainRate;
