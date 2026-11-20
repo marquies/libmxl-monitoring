@@ -9,6 +9,10 @@ everything external services receive, both defined in
 | `mxlMonitoringFlowSnapshot`: one per flow, a consistent copy of all its counts | `mxlMonitoringSnapshot` | Prometheus text rendering, OTLP metric points |
 | `mxlMonitoringEvent`: one per condition change (started / persisting / recovered) | `mxlMonitoringPoll` | event subscribers, OTLP log records |
 
+The NMOS export reads the same snapshots: two of one flow, taken at
+different times, give a monitor's statuses and counters (see
+[NMOS](#nmos-is-12-bcp-008-01-and-bcp-008-02)).
+
 Diagram: [data-model.puml](data-model.puml). Rationale for names and
 values: [DESIGN.md](../DESIGN.md#exporters).
 
@@ -84,3 +88,56 @@ and `mxl.flow.unit`. Replication roles are not exported yet.
 
 A record is self-contained: a subscriber needs nothing but the event to see
 what failed, on which flow, how often and for how long.
+
+## NMOS (IS-12: BCP-008-01 and BCP-008-02)
+
+Worked out by [bcp008.h](../include/mxl-monitoring/bcp008.h)
+([src/Bcp008.cpp](../src/Bcp008.cpp)) for the IS-12 implementation of an NMOS
+Node, which holds the monitor objects and answers controllers. A reader or
+replication source has a BCP-008-01 `NcReceiverMonitor`, a writer or
+replication target a BCP-008-02 `NcSenderMonitor`. Nothing here is pushed or
+served: the Node calls these functions, usually once per poll, and publishes
+the result as monitor properties and their PropertyChanged notifications.
+
+### Domain statuses (`mxlMonitoringBcp008GetStatuses`)
+
+Judged on what was counted between two snapshots of one flow, the Node's
+previous poll and the current one, so a failure recovered from within the
+interval still shows. Each domain carries a status and a status message,
+empty while healthy; a domain nothing in the interval decides is
+`MXL_MONITORING_BCP008_UNCHANGED` (-1), and the Node keeps reporting what it
+reported.
+
+| Domain | `NcReceiverMonitor` | `NcSenderMonitor` | Values | Snapshot source |
+| --- | --- | --- | --- | --- |
+| link | `linkStatus` | `linkStatus` | AllUp (1), AllDown (3) | `access` (`domain_unavailable`) |
+| connection | `connectionStatus` | `transmissionStatus` | Inactive (0), Healthy (1), Unhealthy (3) | `access`, `delivering`; since previous: `accessLosses`, `stalls`, failed reads or commits, `skipped`, `missing`, `too_early` |
+| synchronization | `externalSynchronizationStatus` | `externalSynchronizationStatus` | NotUsed (0), always | none: media timestamps come from the node's own clock |
+| stream | `streamStatus` | `essenceStatus` | Inactive (0), Healthy (1), PartiallyHealthy (2), Unhealthy (3) | since previous: receiver: essence issues and reads; sender: `invalid_input`, `input_late` and `ok` writes |
+
+A disconnected flow is Inactive in connection and stream. The rules per
+domain, and why, are in [DESIGN.md](../DESIGN.md#nmos).
+
+### Counters (`mxlMonitoringBcp008GetCounters`)
+
+Counted from a baseline snapshot, the one the Node keeps at the monitor's
+last reset, to the current one.
+
+| Monitor method | Counter names | Snapshot source | Unit |
+| --- | --- | --- | --- |
+| BCP-008-01 `GetLostPacketCounters` | `skipped`, `missing` | `skipped`, `essence` (`missing`) | grains or samples |
+| BCP-008-01 `GetLatePacketCounters` | `too_early` | `reads` (`too_early`) | reads |
+| BCP-008-02 `GetTransmissionErrorCounters` | `permission_denied`, `out_of_space`, `write_error` | `writes` by outcome | failed commits; failed attempts to write for `out_of_space` |
+
+A counter kind the flow's side does not have is empty, which BCP-008 answers
+with an empty collection.
+
+### Left to the Node
+
+The monitor object's own behaviour stays with the IS-12 implementation:
+delaying reports by `statusReportingDelay`, `overallStatus` as the worst of
+the domains, the status transition counters, Inactive on deactivation, and
+`synchronizationSourceId`, which is `internal` since no external
+synchronization is used. Across a restart of the process counting,
+`mxlMonitoringBcp008Restarted` tells the Node to drop a baseline from before
+it.
