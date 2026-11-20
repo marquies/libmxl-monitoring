@@ -161,13 +161,118 @@ unless asked, since a test pattern may carry reserved codes on purpose.
 
 ## 7. Exporting
 
-Both programs serve `/metrics` through `mxl-monitoring-http`. A process with
-an HTTP server of its own serves `mxlMonitoringPrometheusRender` from it
-instead. The OTLP exporter pushes the same counts, and the events as log
-records, to a collector the standard `OTEL_*` variables name; it is a target
-of its own, built with `-DMXL_MONITORING_OTLP=ON`, and not used by these
-examples (see [Use](../README.md#use)). [data-model.md](data-model.md) lists
-what each exporter sends.
+Both programs serve `/metrics` through `mxl-monitoring-http`. The OTLP
+exporter pushes the same counts, and the events as log records, to a
+collector the standard `OTEL_*` variables name; it is a target of its own,
+built with `-DMXL_MONITORING_OTLP=ON`, and not used by these programs (see
+[Use](../README.md#use)). [data-model.md](data-model.md) lists what each
+exporter sends.
+
+## 8. In a process that already exports
+
+A process that serves metrics or runs OpenTelemetry of its own adds the
+library to what it has. Each program here reads the flow `tutorial-writer`
+writes, with the read loop of hello world. The two in C++ build only with
+`-DMXL_MONITORING_OTLP=ON`, which brings opentelemetry-cpp.
+
+### A metrics endpoint of its own
+
+[examples/own-server.c](../examples/own-server.c) serves HTTP itself and
+links `mxl-monitoring-prometheus` instead of `mxl-monitoring-http`. Its
+handler writes the metrics of the process, then the library's text after
+them:
+
+```c
+size_t size = 0;
+mxlStatus status = mxlMonitoringPrometheusRender(monitoring, NULL, &size); /* sizes the buffer */
+char* body = NULL;
+for (size_t capacity = 0; status == MXL_ERR_INVALID_ARG && size > capacity;)
+{
+    capacity = size;
+    body = realloc(body, ownSize + capacity); /* the example checks it */
+    status = mxlMonitoringPrometheusRender(monitoring, body + ownSize, &size);
+}
+memcpy(body, own, ownSize);
+```
+
+```sh
+build/examples/own-server /dev/shm/tutorial 5fbec3b1-1b0f-417d-9059-8b94a47197ed 9103 &
+curl -s localhost:9103/metrics | grep -E '^(own_server|mxl_reader_reads_total.*ok)'
+```
+
+```
+own_server_requests_total 1
+mxl_reader_reads_total{flow="5fbec3b1-1b0f-417d-9059-8b94a47197ed",result="ok"} 150
+```
+
+The render may run on the server's thread while the reader records.
+Recording between the two calls can grow the text; the second call then
+returns `MXL_ERR_INVALID_ARG` with the size it needs now, and the handler
+renders again.
+
+### An OpenTelemetry setup of its own
+
+[examples/beside-otlp.cpp](../examples/beside-otlp.cpp) sets up a
+MeterProvider of its own with an OTLP exporter, makes it the global one and
+counts grains with it. The library's exporter runs beside it:
+
+```cpp
+opentelemetry::metrics::Provider::SetMeterProvider(std::shared_ptr<opentelemetry::metrics::MeterProvider>{provider});
+mxlMonitoringOtlpStart(monitoring, "beside-otlp", &exporter);
+```
+
+The library builds an OTLP metric exporter and a LoggerProvider of its own,
+and neither sets nor reads the global providers: its metrics do not pass
+through the process's MeterProvider, and the process's configuration stays
+as it is. Both read the same `OTEL_*` variables, so both push to the same
+collector; with `OTEL_SERVICE_NAME` set, both carry the same `service.name`.
+The library's exporter takes `OTEL_METRIC_EXPORT_INTERVAL` as given, while
+opentelemetry-cpp's periodic reader falls back to 60 s unless
+`OTEL_METRIC_EXPORT_TIMEOUT`, 30 s by default, is below it; a process that
+exports every 30 s or more often sets both.
+
+`mxl-monitoring-otlp` is a static library; the executable links it and
+opentelemetry-cpp together, so the process builds against the
+opentelemetry-cpp the library was built with, here the version vcpkg
+installs for the `otlp` feature, and then holds one copy of it.
+
+### Instruments of its own
+
+[examples/own-instruments.cpp](../examples/own-instruments.cpp) uses no
+exporter of the library, only the core. Its observable instruments take a
+snapshot in their callbacks, and a subscriber hands every event to its
+logger:
+
+```cpp
+reads->AddCallback(observeReads, monitoring); /* mxlMonitoringSnapshot, a point per outcome */
+mxlMonitoringSubscribe(monitoring, onEvent, logger.get());
+```
+
+The callbacks run on the SDK's reader thread; the subscriber runs on the
+polling thread, as in section 4, and hands the record to a batch processor.
+The names then live in the process: `own-instruments` uses those of
+[data-model.md](data-model.md) for `mxl.reader.reads` and
+`mxl.reader.delivering`, with the same attributes, and every other metric, and any the library adds
+later, is missing until the process maps it too.
+
+### Go
+
+The Go binding renders the same text with `PrometheusText`, which a handler
+of the process serves beside its own metrics;
+[go/example_test.go](../go/example_test.go) does so with `net/http` alone:
+
+```go
+mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+	text, err := m.PrometheusText()
+	/* ... */
+	fmt.Fprintf(w, "# TYPE own_server_requests_total counter\nown_server_requests_total %d\n", requests.Add(1))
+	fmt.Fprint(w, text)
+})
+```
+
+`Snapshot` gives the counts to instruments of the process's own. The binding
+has no event subscription: the events leave a Go process only as the log
+records of `go/otlp`.
 
 ## A complete media function
 
