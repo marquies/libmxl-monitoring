@@ -46,9 +46,9 @@ namespace
             }
             return false;
         };
-        return lower(earlier.reads, current.reads) || lower(earlier.writes, current.writes) || lower(earlier.content, current.content) ||
+        return lower(earlier.reads, current.reads) || lower(earlier.writes, current.writes) || lower(earlier.essence, current.essence) ||
                lower(earlier.accessFailures, current.accessFailures) || current.opens < earlier.opens ||
-               current.losses < earlier.losses || current.skipped < earlier.skipped || current.stalls < earlier.stalls;
+               current.accessLosses < earlier.accessLosses || current.skipped < earlier.skipped || current.stalls < earlier.stalls;
     }
 
     // Counts since the earlier snapshot. None without one; all of them after
@@ -85,9 +85,9 @@ namespace
             return none ? 0 : current.writes[outcome] - earlier->writes[outcome];
         }
 
-        std::uint64_t content(mxlMonitoringContent issue) const
+        std::uint64_t essence(mxlMonitoringEssence issue) const
         {
-            return none ? 0 : current.content[issue] - earlier->content[issue];
+            return none ? 0 : current.essence[issue] - earlier->essence[issue];
         }
 
         mxlMonitoringFlowSnapshot const* earlier;
@@ -148,7 +148,7 @@ namespace
     // see them as the flow's state.
     std::string interrupted(Delta const& delta, mxlMonitoringFlowSnapshot const& s)
     {
-        if (auto const losses = delta(&mxlMonitoringFlowSnapshot::losses); losses > 0)
+        if (auto const losses = delta(&mxlMonitoringFlowSnapshot::accessLosses); losses > 0)
         {
             return std::format("flow went away {} {}", losses, plural(losses, "time", "times"));
         }
@@ -162,7 +162,7 @@ namespace
             {
                 return std::format("{} failed {}", failed, plural(failed, "read", "reads"));
             }
-            if (auto const lost = delta(&mxlMonitoringFlowSnapshot::skipped) + delta.content(MXL_MONITORING_CONTENT_MISSING); lost > 0)
+            if (auto const lost = delta(&mxlMonitoringFlowSnapshot::skipped) + delta.essence(MXL_MONITORING_ESSENCE_MISSING); lost > 0)
             {
                 return std::format("{} {} lost", lost, units(s, lost));
             }
@@ -204,25 +204,25 @@ namespace
     {
         // Worst first: what cannot be decoded, then what decodes but is not
         // what was expected. Missing grains were lost, not wrong.
-        static constexpr mxlMonitoringContent Issues[] = {
-            MXL_MONITORING_CONTENT_WRONG_FORMAT,
-            MXL_MONITORING_CONTENT_WRONG_SIZE,
-            MXL_MONITORING_CONTENT_INVALID,
-            MXL_MONITORING_CONTENT_WRONG_RESOLUTION,
-            MXL_MONITORING_CONTENT_WRONG_RATE,
-            MXL_MONITORING_CONTENT_INCOMPLETE,
-            MXL_MONITORING_CONTENT_ILLEGAL_VALUES,
+        static constexpr mxlMonitoringEssence Issues[] = {
+            MXL_MONITORING_ESSENCE_WRONG_FORMAT,
+            MXL_MONITORING_ESSENCE_WRONG_SIZE,
+            MXL_MONITORING_ESSENCE_INVALID,
+            MXL_MONITORING_ESSENCE_WRONG_RESOLUTION,
+            MXL_MONITORING_ESSENCE_WRONG_RATE,
+            MXL_MONITORING_ESSENCE_INCOMPLETE,
+            MXL_MONITORING_ESSENCE_ILLEGAL_VALUES,
         };
         for (auto const issue : Issues)
         {
-            if (auto const count = delta.content(issue); count > 0)
+            if (auto const count = delta.essence(issue); count > 0)
             {
-                auto const unhealthy = issue == MXL_MONITORING_CONTENT_WRONG_FORMAT || issue == MXL_MONITORING_CONTENT_WRONG_SIZE ||
-                                       issue == MXL_MONITORING_CONTENT_INVALID;
-                auto message = std::format("{} {} {}", count, units(s, count), mxlMonitoringContentName(issue));
+                auto const unhealthy = issue == MXL_MONITORING_ESSENCE_WRONG_FORMAT || issue == MXL_MONITORING_ESSENCE_WRONG_SIZE ||
+                                       issue == MXL_MONITORING_ESSENCE_INVALID;
+                auto message = std::format("{} {} {}", count, units(s, count), mxlMonitoringEssenceName(issue));
                 auto const mismatch = text(s.formatMismatch);
-                if (!mismatch.empty() && (issue == MXL_MONITORING_CONTENT_WRONG_FORMAT || issue == MXL_MONITORING_CONTENT_WRONG_RESOLUTION ||
-                                             issue == MXL_MONITORING_CONTENT_WRONG_RATE))
+                if (!mismatch.empty() && (issue == MXL_MONITORING_ESSENCE_WRONG_FORMAT || issue == MXL_MONITORING_ESSENCE_WRONG_RESOLUTION ||
+                                             issue == MXL_MONITORING_ESSENCE_WRONG_RATE))
                 {
                     message += std::format(": {}", mismatch);
                 }
@@ -230,10 +230,10 @@ namespace
                 return;
             }
         }
-        // A missing grain counts as invalid content but was never there to
+        // A missing grain counts as invalid essence but was never there to
         // decode.
-        auto const read = delta.read(MXL_MONITORING_READ_OK) + delta.read(MXL_MONITORING_READ_INVALID_CONTENT);
-        auto const missing = delta.content(MXL_MONITORING_CONTENT_MISSING);
+        auto const read = delta.read(MXL_MONITORING_READ_OK) + delta.read(MXL_MONITORING_READ_INVALID_ESSENCE);
+        auto const missing = delta.essence(MXL_MONITORING_ESSENCE_MISSING);
         set(out.stream, read > missing ? MXL_MONITORING_BCP008_HEALTHY : MXL_MONITORING_BCP008_UNCHANGED);
     }
 
@@ -245,11 +245,11 @@ namespace
         if (invalid > 0)
         {
             auto message = std::format("{} {} of invalid input", invalid, units(s, invalid));
-            for (auto issue = 0; issue < MXL_MONITORING_CONTENT_COUNT; ++issue)
+            for (auto issue = 0; issue < MXL_MONITORING_ESSENCE_COUNT; ++issue)
             {
-                if (delta.content(static_cast<mxlMonitoringContent>(issue)) > 0)
+                if (delta.essence(static_cast<mxlMonitoringEssence>(issue)) > 0)
                 {
-                    message += std::format(", {}", mxlMonitoringContentName(static_cast<mxlMonitoringContent>(issue)));
+                    message += std::format(", {}", mxlMonitoringEssenceName(static_cast<mxlMonitoringEssence>(issue)));
                     break;
                 }
             }
@@ -279,7 +279,7 @@ namespace
         {"skipped", "Grains or samples jumped over after the ring overtook the reader",
          [](Delta const& d) { return d(&mxlMonitoringFlowSnapshot::skipped); }                                 },
         {"missing", "Grains or samples whose ring slot held another index: never written",
-         [](Delta const& d) { return d.content(MXL_MONITORING_CONTENT_MISSING); }                              },
+         [](Delta const& d) { return d.essence(MXL_MONITORING_ESSENCE_MISSING); }                              },
     };
 
     constexpr Counter Late[] = {

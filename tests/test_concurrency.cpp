@@ -51,7 +51,7 @@ TEST_CASE("Concurrent recording, polling and snapshots lose no count", "[concurr
                     if (i % 100 == 0)
                     {
                         mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, i, 1);
-                        mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_INCOMPLETE, i, 1);
+                        mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_INCOMPLETE, i, 1);
                     }
                 }
             });
@@ -90,7 +90,7 @@ TEST_CASE("Concurrent recording, polling and snapshots lose no count", "[concurr
     {
         CHECK(s.reads[MXL_MONITORING_READ_OK] == Reads);
         CHECK(s.reads[MXL_MONITORING_READ_TOO_LATE] == Reads / 100);
-        CHECK(s.content[MXL_MONITORING_CONTENT_INCOMPLETE] == Reads / 100);
+        CHECK(s.essence[MXL_MONITORING_ESSENCE_INCOMPLETE] == Reads / 100);
         CHECK(s.arrivalLatency.count == Reads + Reads / 100);
     }
     INFO("each flow started both conditions at least once");

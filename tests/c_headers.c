@@ -2,7 +2,7 @@
  * C++ accepts fails the build. */
 
 #include "mxl-monitoring/bcp008.h"
-#include "mxl-monitoring/content.h"
+#include "mxl-monitoring/essence.h"
 #include "mxl-monitoring/http.h"
 #include "mxl-monitoring/monitoring.h"
 #include "mxl-monitoring/otlp.h"

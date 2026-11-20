@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 #include <catch2/catch_test_macros.hpp>
-#include "mxl-monitoring/content.h"
+#include "mxl-monitoring/essence.h"
 #include "Support.hpp"
 
 using namespace mxl::monitoring::tests;
@@ -61,7 +61,7 @@ namespace
     struct Check
     {
         bool found;
-        mxlMonitoringContent issue;
+        mxlMonitoringEssence issue;
         std::string detail;
     };
 
@@ -76,7 +76,7 @@ namespace
     }
 }
 
-TEST_CASE("A flow definition is read for what the checks need", "[content]")
+TEST_CASE("A flow definition is read for what the checks need", "[essence]")
 {
     auto const d = v210();
     CHECK(std::string{d.mediaType} == "video/v210");
@@ -102,7 +102,7 @@ TEST_CASE("A flow definition is read for what the checks need", "[content]")
     CHECK(mxlMonitoringParseDefinition("not json", &none) == MXL_ERR_INVALID_ARG);
 }
 
-TEST_CASE("A mismatch names each way the flow differs, and which issue it is", "[content]")
+TEST_CASE("A mismatch names each way the flow differs, and which issue it is", "[essence]")
 {
     auto const d = v210();
     auto e = expectation();
@@ -117,19 +117,19 @@ TEST_CASE("A mismatch names each way the flow differs, and which issue it is", "
 
     e.width = 1920;
     e.height = 1080;
-    CHECK(mxlMonitoringMismatch(&d, &e, message, sizeof(message)) == (1U << MXL_MONITORING_CONTENT_WRONG_RESOLUTION));
+    CHECK(mxlMonitoringMismatch(&d, &e, message, sizeof(message)) == (1U << MXL_MONITORING_ESSENCE_WRONG_RESOLUTION));
     CHECK(std::string{message} == "1296x720 where 1920x1080 was expected");
 
     e.mediaType = "video/v216";
     e.rate = mxlRational{50, 1};
     auto const bits = mxlMonitoringMismatch(&d, &e, message, sizeof(message));
-    CHECK(bits == ((1U << MXL_MONITORING_CONTENT_WRONG_FORMAT) | (1U << MXL_MONITORING_CONTENT_WRONG_RESOLUTION) |
-                      (1U << MXL_MONITORING_CONTENT_WRONG_RATE)));
+    CHECK(bits == ((1U << MXL_MONITORING_ESSENCE_WRONG_FORMAT) | (1U << MXL_MONITORING_ESSENCE_WRONG_RESOLUTION) |
+                      (1U << MXL_MONITORING_ESSENCE_WRONG_RATE)));
     CHECK(std::string{message} ==
           "media type video/v210 where video/v216 was expected; 1296x720 where 1920x1080 was expected; rate 30000/1001 where 50/1 was expected");
 }
 
-TEST_CASE("A grain lands in exactly one issue, worst first", "[content]")
+TEST_CASE("A grain lands in exactly one issue, worst first", "[essence]")
 {
     auto const d = v210();
     auto picture = greyPicture(d);
@@ -139,30 +139,30 @@ TEST_CASE("A grain lands in exactly one issue, worst first", "[content]")
 
     auto c = checkGrain(d, 0, false, grain, 8, picture);
     CHECK(c.found);
-    CHECK(c.issue == MXL_MONITORING_CONTENT_MISSING);
+    CHECK(c.issue == MXL_MONITORING_ESSENCE_MISSING);
 
     auto invalid = grain;
     invalid.flags = MXL_GRAIN_FLAG_INVALID;
     invalid.validSlices = 0;
     c = checkGrain(d, 0, false, invalid, 7, picture);
     INFO("a gap-fill grain counts once, as invalid, not also as incomplete");
-    CHECK(c.issue == MXL_MONITORING_CONTENT_INVALID);
+    CHECK(c.issue == MXL_MONITORING_ESSENCE_INVALID);
 
     auto partial = grain;
     partial.validSlices = 100;
-    CHECK(checkGrain(d, 0, false, partial, 7, picture).issue == MXL_MONITORING_CONTENT_INCOMPLETE);
+    CHECK(checkGrain(d, 0, false, partial, 7, picture).issue == MXL_MONITORING_ESSENCE_INCOMPLETE);
 
     auto small = grain;
     small.grainSize -= 128;
-    CHECK(checkGrain(d, 0, false, small, 7, picture).issue == MXL_MONITORING_CONTENT_WRONG_SIZE);
+    CHECK(checkGrain(d, 0, false, small, 7, picture).issue == MXL_MONITORING_ESSENCE_WRONG_SIZE);
 
     INFO("a flow that differs from its expectation counts as that, whatever else is wrong");
-    CHECK(checkGrain(d, 1U << MXL_MONITORING_CONTENT_WRONG_RATE, false, small, 8, picture).issue == MXL_MONITORING_CONTENT_WRONG_RATE);
-    CHECK(checkGrain(d, (1U << MXL_MONITORING_CONTENT_WRONG_RATE) | (1U << MXL_MONITORING_CONTENT_WRONG_FORMAT), false, small, 8, picture).issue ==
-          MXL_MONITORING_CONTENT_WRONG_FORMAT);
+    CHECK(checkGrain(d, 1U << MXL_MONITORING_ESSENCE_WRONG_RATE, false, small, 8, picture).issue == MXL_MONITORING_ESSENCE_WRONG_RATE);
+    CHECK(checkGrain(d, (1U << MXL_MONITORING_ESSENCE_WRONG_RATE) | (1U << MXL_MONITORING_ESSENCE_WRONG_FORMAT), false, small, 8, picture).issue ==
+          MXL_MONITORING_ESSENCE_WRONG_FORMAT);
 }
 
-TEST_CASE("Sample values are checked only when asked, and located", "[content]")
+TEST_CASE("Sample values are checked only when asked, and located", "[essence]")
 {
     auto const d = v210();
     auto picture = greyPicture(d);
@@ -172,11 +172,11 @@ TEST_CASE("Sample values are checked only when asked, and located", "[content]")
 
     CHECK_FALSE(checkGrain(d, 0, false, grain, 7, picture).found);
     auto const c = checkGrain(d, 0, true, grain, 7, picture);
-    CHECK(c.issue == MXL_MONITORING_CONTENT_ILLEGAL_VALUES);
+    CHECK(c.issue == MXL_MONITORING_ESSENCE_ILLEGAL_VALUES);
     CHECK(c.detail == "v210 code 0 at row 719, word 2, bit 0");
 }
 
-TEST_CASE("Float audio is legal within -1..1 and when it is a number", "[content]")
+TEST_CASE("Float audio is legal within -1..1 and when it is a number", "[essence]")
 {
     auto d = mxlMonitoringDeclared{};
     REQUIRE(mxlMonitoringParseDefinition(R"({"media_type": "audio/float32"})", &d) == MXL_STATUS_OK);
@@ -185,18 +185,18 @@ TEST_CASE("Float audio is legal within -1..1 and when it is a number", "[content
     slices.base.fragments[0].pointer = left.data();
     slices.base.fragments[0].size = left.size() * sizeof(float);
     slices.count = 1;
-    auto issue = mxlMonitoringContent{};
+    auto issue = mxlMonitoringEssence{};
 
     CHECK_FALSE(mxlMonitoringCheckSamples(&d, 0, true, &slices, &issue, nullptr, 0));
     left[1] = 1.5F;
     CHECK_FALSE(mxlMonitoringCheckSamples(&d, 0, false, &slices, &issue, nullptr, 0));
     CHECK(mxlMonitoringCheckSamples(&d, 0, true, &slices, &issue, nullptr, 0));
-    CHECK(issue == MXL_MONITORING_CONTENT_ILLEGAL_VALUES);
+    CHECK(issue == MXL_MONITORING_ESSENCE_ILLEGAL_VALUES);
     left[1] = std::nanf("");
     CHECK(mxlMonitoringCheckSamples(&d, 0, true, &slices, &issue, nullptr, 0));
 }
 
-TEST_CASE("A flow keeps its definition and expectation and reports the mismatch", "[content]")
+TEST_CASE("A flow keeps its definition and expectation and reports the mismatch", "[essence]")
 {
     auto context = Context{};
     auto const flow = context.add();

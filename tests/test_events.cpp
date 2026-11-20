@@ -38,7 +38,7 @@ TEST_CASE("A read condition starts, persists and recovers", "[events]")
     CHECK(started.status == MXL_ERR_OUT_OF_RANGE_TOO_LATE);
     CHECK(started.index == 71);
     CHECK(started.occurrences == 2);
-    CHECK(started.content == MXL_MONITORING_CONTENT_COUNT);
+    CHECK(started.essence == MXL_MONITORING_ESSENCE_COUNT);
     INFO("an event says what the flow is, for a subscriber that has only the event");
     CHECK(started.version == 3);
     CHECK(started.format == MXL_DATA_FORMAT_VIDEO);
@@ -92,7 +92,7 @@ TEST_CASE("A flow that only went quiet has not recovered", "[events]")
     CHECK(context.events[1].phase == MXL_MONITORING_PHASE_RECOVERED);
 }
 
-TEST_CASE("A flow delivering only bad content has not recovered", "[events]")
+TEST_CASE("A flow delivering only bad essence has not recovered", "[events]")
 {
     auto context = Context{};
     auto const flow = context.open();
@@ -101,7 +101,7 @@ TEST_CASE("A flow delivering only bad content has not recovered", "[events]")
     for (int i = 0; i < 100; ++i)
     {
         context.now += 20 * Ms;
-        mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_INCOMPLETE, context.dueIndex(), 1);
+        mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_INCOMPLETE, context.dueIndex(), 1);
     }
     mxlMonitoringPoll(context.monitoring);
     for (auto const& event : context.events)
@@ -158,7 +158,7 @@ TEST_CASE("An access condition ends when the flow is open", "[events]")
     CHECK(context.events[1].durationNs == 5 * Second);
 }
 
-TEST_CASE("A flow lost under its reader starts an access condition", "[events]")
+TEST_CASE("A flow going away under its reader starts an access condition", "[events]")
 {
     auto context = Context{};
     auto const flow = context.open();
@@ -170,22 +170,22 @@ TEST_CASE("A flow lost under its reader starts an access condition", "[events]")
     CHECK(context.events[0].status == MXL_ERR_FLOW_INVALID);
 }
 
-TEST_CASE("Content issues notify separately", "[events]")
+TEST_CASE("Essence issues notify separately", "[events]")
 {
     auto context = Context{};
     auto const flow = context.open();
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_WRONG_FORMAT, 1, 1);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_ILLEGAL_VALUES, 2, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_WRONG_FORMAT, 1, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, 2, 1);
     mxlMonitoringPoll(context.monitoring);
     REQUIRE(context.events.size() == 2);
     for (auto const& event : context.events)
     {
         CHECK(event.kind == MXL_MONITORING_CONDITION_READ);
-        CHECK(event.read == MXL_MONITORING_READ_INVALID_CONTENT);
+        CHECK(event.read == MXL_MONITORING_READ_INVALID_ESSENCE);
         CHECK(event.phase == MXL_MONITORING_PHASE_STARTED);
     }
-    CHECK(context.events[0].content == MXL_MONITORING_CONTENT_WRONG_FORMAT);
-    CHECK(context.events[1].content == MXL_MONITORING_CONTENT_ILLEGAL_VALUES);
+    CHECK(context.events[0].essence == MXL_MONITORING_ESSENCE_WRONG_FORMAT);
+    CHECK(context.events[1].essence == MXL_MONITORING_ESSENCE_ILLEGAL_VALUES);
     CHECK(context.events[1].index == 2);
 }
 
@@ -194,14 +194,14 @@ TEST_CASE("Writer conditions are write conditions", "[events]")
     auto context = Context{};
     auto const flow = context.open(MXL_MONITORING_ROLE_WRITER);
     mxlMonitoringRecordWriteOutcome(flow, MXL_MONITORING_WRITE_INPUT_LATE, MXL_STATUS_OK, 4, 2);
-    mxlMonitoringRecordWriteContent(flow, MXL_MONITORING_CONTENT_WRONG_SIZE, 5, 1);
+    mxlMonitoringRecordWriteEssence(flow, MXL_MONITORING_ESSENCE_WRONG_SIZE, 5, 1);
     mxlMonitoringPoll(context.monitoring);
     REQUIRE(context.events.size() == 2);
     CHECK(context.events[0].kind == MXL_MONITORING_CONDITION_WRITE);
     CHECK(context.events[0].write == MXL_MONITORING_WRITE_INPUT_LATE);
     CHECK(context.events[0].occurrences == 2);
     CHECK(context.events[1].write == MXL_MONITORING_WRITE_INVALID_INPUT);
-    CHECK(context.events[1].content == MXL_MONITORING_CONTENT_WRONG_SIZE);
+    CHECK(context.events[1].essence == MXL_MONITORING_ESSENCE_WRONG_SIZE);
 }
 
 TEST_CASE("Disconnecting ends an access condition and silences a flow without data", "[events]")
@@ -229,13 +229,13 @@ TEST_CASE("A caller recording by hand describes its own conditions", "[events]")
 {
     auto context = Context{};
     auto const flow = context.open();
-    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_CONTENT,
-                MXL_MONITORING_CONTENT_ILLEGAL_VALUES, "v210 code 0 at row 1") == MXL_STATUS_OK);
-    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_ERROR, MXL_MONITORING_CONTENT_COUNT,
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_ESSENCE,
+                MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, "v210 code 0 at row 1") == MXL_STATUS_OK);
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_ERROR, MXL_MONITORING_ESSENCE_COUNT,
                 "read failed: status 8") == MXL_STATUS_OK);
-    CHECK(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_CONTENT, MXL_MONITORING_CONTENT_COUNT, "x") ==
+    CHECK(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_READ, MXL_MONITORING_READ_INVALID_ESSENCE, MXL_MONITORING_ESSENCE_COUNT, "x") ==
           MXL_ERR_INVALID_ARG);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_ILLEGAL_VALUES, 1, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, 1, 1);
     mxlMonitoringRecordRead(flow, MXL_ERR_INVALID_ARG, 2, 1);
     mxlMonitoringPoll(context.monitoring);
     REQUIRE(context.events.size() == 2);

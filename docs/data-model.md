@@ -16,13 +16,13 @@ values: [DESIGN.md](../DESIGN.md#exporters).
 
 **Snapshot** (per flow): identity (`flowId`, `target`, `role`), format
 (`unit`, `format`, `rate`, `mediaType`), access state and failure counts,
-`opens` and `losses`, read/write outcome counters, content issue counters,
+`opens` and `accessLosses`, read/write outcome counters, essence issue counters,
 `skipped`, `stalls`, the last error (status, index, time, text),
 `formatMismatch`, three latency histograms (arrival, commit, input; 18 fixed
 buckets, 1 ms to 81.92 s), `lastIndex`, `ageNs` and `delivering`.
 
 **Event** (per condition change): `timeNs`, `flowId`, `role`, condition
-(`kind` + access/read/write outcome + content issue), `phase`, last libmxl
+(`kind` + access/read/write outcome + essence issue), `phase`, last libmxl
 `status`, last affected `index`, `occurrences` since the previous event,
 `total` and `durationNs` since started, a one-line `detail` text, and the
 flow's `format` and `unit`.
@@ -31,19 +31,20 @@ flow's `format` and `unit`.
 
 Rendered from snapshots by `mxl-monitoring-prometheus`
 ([src/Prometheus.cpp](../src/Prometheus.cpp)). Each role gets its own prefix: `mxl_reader`,
-`mxl_writer`, `mxl_gateway_source`, `mxl_gateway_target`. Every series
+`mxl_writer`, `mxl_replication_source`, `mxl_replication_target`. Every series
 carries a `flow` label with the flow's id.
 
 | Metric | Type | Extra labels | Snapshot source |
 | --- | --- | --- | --- |
 | `<prefix>_flow_state` | gauge (0/1) | `state`: access names | `access` |
 | `<prefix>_flow_delivering` | gauge (0/1) | | `delivering` |
-| `<prefix>_reads_total` | counter | `result`: `ok`, `too_early`, `too_late`, `permission_error`, `other_error`, plus content issues as own results | `reads` + `content` |
-| `<prefix>_writes_total` | counter | `result`: write outcomes | `writes` |
-| `<prefix>_invalid_input_total` | counter | `issue`: content issues | `content` |
-| `<prefix>_open_failures_total` | counter | `reason`: `domain`, `not_found`, `permission`, `other` | `accessFailures` |
+| `<prefix>_reads_total` | counter | `result`: reader: `ok`, `too_early`, `too_late`, `permission_error`, `other_error`, plus essence issues as own results; source: the read outcome names | `reads` + `essence` |
+| `<prefix>_writes_total` | counter | `result`: write outcome names | `writes` |
+| `<prefix>_invalid_essence_total` | counter | `issue`: essence issues (source) | `essence` |
+| `<prefix>_invalid_input_total` | counter | `issue`: essence issues | `essence` |
+| `<prefix>_open_failures_total` | counter | `reason`: reader: `domain`, `not_found`, `permission`, `other`; others: `domain_unavailable`, `flow_not_found`, `permission_denied`, `flow_invalid`, `other` | `accessFailures` |
 | `<prefix>_skipped_total`, `<prefix>_stalls_total` | counter | | `skipped`, `stalls` |
-| `<prefix>_opens_total`, `<prefix>_lost_total` | counter | | `opens`, `losses` |
+| `<prefix>_opens_total`, `<prefix>_access_losses_total` | counter | | `opens`, `accessLosses` |
 | `<prefix>_age_seconds` | gauge | | `ageNs` |
 | `<prefix>_arrival_seconds`, `<prefix>_commit_seconds`, `<prefix>_input_seconds` | histogram | `le` buckets | the three histograms |
 
@@ -63,12 +64,12 @@ and `mxl.flow.unit`. Replication roles are not exported yet.
 | --- | --- | --- |
 | `mxl.flow.state` | gauge | `mxl.flow.state`: access names |
 | `mxl.flow.open.failures` | counter | `mxl.open.failure` |
-| `mxl.flow.opens`, `mxl.flow.reopens` | counter | |
-| `mxl.reader.reads` | counter | `mxl.read.result`, with `mxl.content.issue` for `invalid_content` |
+| `mxl.flow.opens`, `mxl.flow.access.losses` | counter | |
+| `mxl.reader.reads` | counter | `mxl.read.result`, with `mxl.essence.issue` for `invalid_essence` |
 | `mxl.reader.skipped`, `mxl.reader.stalls` | counter | |
 | `mxl.reader.delivering`, `mxl.reader.age` | gauge | |
 | `mxl.reader.arrival.latency`, `mxl.reader.commit.latency` | histogram | |
-| `mxl.writer.writes` | counter | `mxl.write.result`, with `mxl.content.issue` for `invalid_input` |
+| `mxl.writer.writes` | counter | `mxl.write.result`, with `mxl.essence.issue` for `invalid_input` |
 | `mxl.writer.delivering`, `mxl.writer.head` | gauge | |
 | `mxl.writer.commit.latency`, `mxl.writer.input.latency` | histogram | |
 
@@ -79,7 +80,7 @@ and `mxl.flow.unit`. Replication roles are not exported yet.
 | event name | `mxl.flow.open_failed` / `open_failing` / `opened`; `mxl.reader.read_failed` / `read_recovered`; `mxl.writer.write_failed` / `write_recovered` |
 | severity | WARN for `too_early`, `too_late`, `input_late`; ERROR for other failures; INFO for a recovery |
 | body | the event's one-sentence `detail` |
-| attributes | the outcome (`mxl.open.failure` / `mxl.read.result` / `mxl.write.result`), `mxl.content.issue`, `mxl.event.phase`, `mxl.status`, `mxl.grain.index`, `mxl.occurrences`, `mxl.total`, `mxl.duration` |
+| attributes | the outcome (`mxl.open.failure` / `mxl.read.result` / `mxl.write.result`), `mxl.essence.issue`, `mxl.event.phase`, `mxl.status`, `mxl.grain.index`, `mxl.occurrences`, `mxl.total`, `mxl.duration` |
 
 A record is self-contained: a subscriber needs nothing but the event to see
 what failed, on which flow, how often and for how long.

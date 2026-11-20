@@ -91,18 +91,18 @@ namespace
             auto attributes = flowAttributes(s);
             for (auto read = 0; read < MXL_MONITORING_READ_COUNT; ++read)
             {
-                if (read != MXL_MONITORING_READ_INVALID_CONTENT)
+                if (read != MXL_MONITORING_READ_INVALID_ESSENCE)
                 {
                     attributes["mxl.read.result"] = mxlMonitoringReadName(static_cast<mxlMonitoringRead>(read));
                     observer.Observe(static_cast<int64_t>(s.reads[read]), attributes);
                 }
             }
-            // invalid_content is counted per issue, as the library's exporter does.
-            attributes["mxl.read.result"] = "invalid_content";
-            for (auto issue = 0; issue < MXL_MONITORING_CONTENT_COUNT; ++issue)
+            // invalid_essence is counted per issue, as the library's exporter does.
+            attributes["mxl.read.result"] = "invalid_essence";
+            for (auto issue = 0; issue < MXL_MONITORING_ESSENCE_COUNT; ++issue)
             {
-                attributes["mxl.content.issue"] = mxlMonitoringContentName(static_cast<mxlMonitoringContent>(issue));
-                observer.Observe(static_cast<int64_t>(s.content[issue]), attributes);
+                attributes["mxl.essence.issue"] = mxlMonitoringEssenceName(static_cast<mxlMonitoringEssence>(issue));
+                observer.Observe(static_cast<int64_t>(s.essence[issue]), attributes);
             }
         }
     }
@@ -128,7 +128,7 @@ namespace
         record->SetSeverity(event->phase == MXL_MONITORING_PHASE_RECOVERED ? opentelemetry::logs::Severity::kInfo
                                                                            : opentelemetry::logs::Severity::kWarn);
         auto body = std::string{outcome} + " " + phases[event->phase];
-        if (auto const* issue = mxlMonitoringContentName(event->content))
+        if (auto const* issue = mxlMonitoringEssenceName(event->essence))
         {
             body.append(" ").append(issue);
         }

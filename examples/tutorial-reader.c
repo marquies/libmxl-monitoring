@@ -1,5 +1,5 @@
 // The reader of docs/tutorial.md: hello-world.c with an expectation the
-// content of every grain is checked against, the events printed as they
+// essence of every grain is checked against, the events printed as they
 // come, a status line every second, and the flow opened again whenever it
 // goes away.
 //
@@ -13,7 +13,7 @@
 #include <mxl/flowinfo.h>
 #include <mxl/mxl.h>
 #include <mxl/time.h>
-#include <mxl-monitoring/content.h>
+#include <mxl-monitoring/essence.h>
 #include <mxl-monitoring/http.h>
 #include <mxl-monitoring/monitoring.h>
 #include <mxl-monitoring/reader.h>
@@ -57,11 +57,11 @@ static void printStatus(mxlMonitoring monitoring)
     {
         return;
     }
-    printf("status %-18s ok %llu, too early %llu, too late %llu, invalid content %llu\n",
+    printf("status %-18s ok %llu, too early %llu, too late %llu, invalid essence %llu\n",
         snapshot.delivering ? "delivering" : mxlMonitoringAccessName(snapshot.access),
         (unsigned long long)snapshot.reads[MXL_MONITORING_READ_OK], (unsigned long long)snapshot.reads[MXL_MONITORING_READ_TOO_EARLY],
         (unsigned long long)snapshot.reads[MXL_MONITORING_READ_TOO_LATE],
-        (unsigned long long)snapshot.reads[MXL_MONITORING_READ_INVALID_CONTENT]);
+        (unsigned long long)snapshot.reads[MXL_MONITORING_READ_INVALID_ESSENCE]);
     fflush(stdout);
 }
 

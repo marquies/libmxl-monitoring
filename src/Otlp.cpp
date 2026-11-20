@@ -209,7 +209,7 @@ namespace
                 static_cast<std::int64_t>(s.access == a ? 1 : 0));
         }
         // FLOW_INVALID and OTHER are failures of their own here, unlike the
-        // Prometheus reasons, which fold them into other.
+        // reader's Prometheus reasons, which fold them into other.
         for (auto const a : {MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE,
                  MXL_MONITORING_ACCESS_FLOW_NOT_FOUND,
                  MXL_MONITORING_ACCESS_PERMISSION_DENIED,
@@ -223,15 +223,15 @@ namespace
                 s.accessFailures[a]);
         }
         batch.counter("mxl.flow.opens", "Times the flow was opened.", "{open}", base, s.opens);
-        batch.counter("mxl.flow.reopens", "Times an open flow went away.", "{open}", base, s.losses);
+        batch.counter("mxl.flow.access.losses", "Times an open flow went away.", "{loss}", base, s.accessLosses);
 
-        auto const content = [&](char const* name, char const* description, char const* resultKey, char const* result)
+        auto const essence = [&](char const* name, char const* description, char const* resultKey, char const* result)
         {
-            for (auto issue = 0; issue < MXL_MONITORING_CONTENT_COUNT; ++issue)
+            for (auto issue = 0; issue < MXL_MONITORING_ESSENCE_COUNT; ++issue)
             {
                 auto attributes = with(base, resultKey, result);
-                attributes.SetAttribute("mxl.content.issue", mxlMonitoringContentName(static_cast<mxlMonitoringContent>(issue)));
-                batch.counter(name, description, "1", std::move(attributes), s.content[issue]);
+                attributes.SetAttribute("mxl.essence.issue", mxlMonitoringEssenceName(static_cast<mxlMonitoringEssence>(issue)));
+                batch.counter(name, description, "1", std::move(attributes), s.essence[issue]);
             }
         };
 
@@ -239,11 +239,11 @@ namespace
         {
             case MXL_MONITORING_ROLE_READER:
             {
-                char const* const reads = "Reads by outcome; ok and invalid_content in grains or samples, the rest in occurrences.";
+                char const* const reads = "Reads by outcome; ok and invalid_essence in grains or samples, the rest in occurrences.";
                 for (auto read = 0; read < MXL_MONITORING_READ_COUNT; ++read)
                 {
-                    // Invalid content is counted per issue below.
-                    if (read != MXL_MONITORING_READ_INVALID_CONTENT)
+                    // Invalid essence is counted per issue below.
+                    if (read != MXL_MONITORING_READ_INVALID_ESSENCE)
                     {
                         batch.counter("mxl.reader.reads",
                             reads,
@@ -252,7 +252,7 @@ namespace
                             s.reads[read]);
                     }
                 }
-                content("mxl.reader.reads", reads, "mxl.read.result", "invalid_content");
+                essence("mxl.reader.reads", reads, "mxl.read.result", "invalid_essence");
                 batch.counter("mxl.reader.skipped", "Grains or samples jumped over to reach the head again.", "1", base, s.skipped);
                 batch.counter("mxl.reader.stalls", "Read timeouts that passed with no read at all.", "{timeout}", base, s.stalls);
                 batch.gauge("mxl.reader.delivering", "1 while reads land within a second.", "{flow}", base, static_cast<std::int64_t>(s.delivering));
@@ -279,7 +279,7 @@ namespace
                             s.writes[write]);
                     }
                 }
-                content("mxl.writer.writes", writes, "mxl.write.result", "invalid_input");
+                essence("mxl.writer.writes", writes, "mxl.write.result", "invalid_input");
                 batch.gauge("mxl.writer.delivering", "1 while commits land within a second.", "{flow}", base, static_cast<std::int64_t>(s.delivering));
                 batch.histogram("mxl.writer.commit.latency", "Commit time minus the media timestamp of what was committed.", base, s.commitLatency);
                 batch.histogram("mxl.writer.input.latency", "Input arrival minus the media timestamp it is written at.", base, s.inputLatency);
@@ -344,7 +344,7 @@ namespace
         auto const outcome = e.kind == MXL_MONITORING_CONDITION_ACCESS ? openFailureName(e.access)
                            : e.kind == MXL_MONITORING_CONDITION_READ   ? mxlMonitoringReadName(e.read)
                                                                        : mxlMonitoringWriteName(e.write);
-        auto const* issue = mxlMonitoringContentName(e.content);
+        auto const* issue = mxlMonitoringEssenceName(e.essence);
         auto text = std::format("flow {} {}{}{}", id, outcome, issue != nullptr ? " " : "", issue != nullptr ? issue : "");
         switch (e.phase)
         {
@@ -450,9 +450,9 @@ struct mxlMonitoringOtlp_t
             case MXL_MONITORING_CONDITION_READ:   record->SetAttribute("mxl.read.result", mxlMonitoringReadName(e.read)); break;
             case MXL_MONITORING_CONDITION_WRITE:  record->SetAttribute("mxl.write.result", mxlMonitoringWriteName(e.write)); break;
         }
-        if (auto const* issue = mxlMonitoringContentName(e.content))
+        if (auto const* issue = mxlMonitoringEssenceName(e.essence))
         {
-            record->SetAttribute("mxl.content.issue", issue);
+            record->SetAttribute("mxl.essence.issue", issue);
         }
         record->SetAttribute("mxl.event.phase", phaseName(e.phase));
         record->SetAttribute("mxl.status", statusName(e.status));

@@ -74,7 +74,7 @@ mxlMonitoringSnapshot(monitoring, &snapshot, &count);
 ```
 
 ```
-status delivering         ok 102, too early 0, too late 0, invalid content 0
+status delivering         ok 102, too early 0, too late 0, invalid essence 0
 ```
 
 `delivering` is true while data moved within the last second; otherwise the
@@ -104,9 +104,9 @@ pkill -STOP tutorial-writer; sleep 4; pkill -CONT tutorial-writer
 
 ```
 event started    too_early, 1 occurrence(s)
-status open               ok 151, too early 1, too late 0, invalid content 0
+status open               ok 151, too early 1, too late 0, invalid essence 0
 event recovered  too_early, 1 occurrence(s)
-status delivering         ok 402, too early 1, too late 0, invalid content 0
+status delivering         ok 402, too early 1, too late 0, invalid essence 0
 ```
 
 A reader at the head waits for the next grain, so a too-early read counts
@@ -122,18 +122,18 @@ build/examples/tutorial-writer /dev/shm/tutorial &
 
 ```
 event started    flow_not_found, 1 occurrence(s): flow 5fbec3b1-1b0f-417d-9059-8b94a47197ed went away
-status flow_not_found     ok 501, too early 1, too late 0, invalid content 0
+status flow_not_found     ok 501, too early 1, too late 0, invalid essence 0
 event started    flow_not_found, 1 occurrence(s): flow 5fbec3b1-1b0f-417d-9059-8b94a47197ed not found in the domain
 event recovered  flow_not_found, 3 occurrence(s): flow 5fbec3b1-1b0f-417d-9059-8b94a47197ed not found in the domain
 event recovered  flow_not_found, 1 occurrence(s): flow 5fbec3b1-1b0f-417d-9059-8b94a47197ed went away
-status delivering         ok 502, too early 1, too late 0, invalid content 0
+status delivering         ok 502, too early 1, too late 0, invalid essence 0
 ```
 
 The writer releases its flow on exit and libmxl deletes it. The open reader
 loses it, which counts as a loss of access rather than a failed read, and
 each attempt to open it again counts as not found until the writer is back.
 
-## 6. Checking the content
+## 6. Checking the essence
 
 The fourth: an expectation. The reader wrappers check every grain against it
 and against the flow's own definition:
@@ -148,11 +148,11 @@ mxlMonitoringSetExpectation(flow, &expected);
 ```
 
 Change `.width` to 64, build and run the reader again: every grain now counts
-as invalid content, and the event says why:
+as invalid essence, and the event says why:
 
 ```
-event started    invalid_content, 1 occurrence(s): format differs from what was expected: 48x8 where 64x8 was expected
-status delivering         ok 0, too early 0, too late 0, invalid content 151
+event started    invalid_essence, 1 occurrence(s): format differs from what was expected: 48x8 where 64x8 was expected
+status delivering         ok 0, too early 0, too late 0, invalid essence 151
 ```
 
 In the Prometheus text these are `mxl_reader_reads_total{result="wrong_format"}`.
@@ -279,7 +279,7 @@ records of `go/otlp`.
 [mxl-reader](https://github.com/marquies/dmf-mf-mxl-reader) is what the
 tutorial's reader becomes in production: it reads every grain or batch of
 samples of each flow it is given through the reader wrappers, checks the
-content against an expectation per flow, and serves the counts as `/metrics`,
+essence against an expectation per flow, and serves the counts as `/metrics`,
 `/status` as JSON and a live view of each flow's ring. As an NMOS Node it
 gives each flow a Receiver a controller connects over IS-05, and moves the
 flow handle with `mxlMonitoringSetFlowTarget`, so a Receiver keeps its name

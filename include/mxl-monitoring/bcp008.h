@@ -1,11 +1,15 @@
-// What an AMWA BCP-008 monitor reports for a flow: an NcReceiverMonitor for a
-// reader or replication source, an NcSenderMonitor for a writer or
+// What an AMWA monitor reports for a flow: a BCP-008-01 NcReceiverMonitor for
+// a reader or replication source, a BCP-008-02 NcSenderMonitor for a writer or
 // replication target. Worked out from snapshots, with no NMOS dependency.
 //
 // The IS-12 implementation of the Node holds the monitor object. It applies
 // statusReportingDelay, counts status transitions, derives overallStatus,
 // and makes a monitor Inactive on deactivation; the calls here decide the
-// domain statuses it is handed and the counters it answers with.
+// domain statuses it is handed and the counters it answers with. It also
+// sets synchronizationSourceId, which nothing here provides: `internal`,
+// since MXL media timestamps come from the node's own clock and BCP-008-01
+// and BCP-008-02 require `internal` of a device not intending to use
+// external synchronization.
 
 #pragma once
 
@@ -19,7 +23,7 @@ extern "C"
 {
 #endif
 
-    // The values BCP-008 gives every status domain. Link status uses 1 to 3
+    // The values BCP-008-01 and BCP-008-02 give every status domain. Link status uses 1 to 3
     // for AllUp, SomeDown and AllDown, synchronization 0 for NotUsed.
     typedef enum mxlMonitoringBcp008Status
     {
@@ -49,7 +53,8 @@ extern "C"
         mxlMonitoringBcp008Domain link;
         // Receiver: connectionStatus. Sender: transmissionStatus.
         mxlMonitoringBcp008Domain connection;
-        // NotUsed: MXL timestamps come from the node's own clock.
+        // NotUsed: MXL timestamps come from the node's own clock. The
+        // Node reports synchronizationSourceId `internal` with it.
         mxlMonitoringBcp008Domain synchronization;
         // Receiver: streamStatus. Sender: essenceStatus.
         mxlMonitoringBcp008Domain stream;
@@ -67,8 +72,11 @@ extern "C"
     //   connection  Unhealthy while the flow is not open or delivers nothing,
     //               or if since previous it went away, stalled, failed a
     //               read, lost grains or samples (skipped, missing) or read
-    //               late (too early past the grace); Healthy otherwise
-    //   stream      by the worst content issue read since previous:
+    //               late (too early past the grace); Healthy otherwise.
+    //               A too_late read counts in no status or counter of
+    //               its own; the grains the caller then reports skipped
+    //               (mxlMonitoringRecordSkipped) count as lost
+    //   stream      by the worst essence issue read since previous:
     //               Unhealthy for wrong format, wrong size or invalid,
     //               PartiallyHealthy for wrong resolution, wrong rate,
     //               incomplete or illegal values, Healthy for none;
@@ -114,7 +122,7 @@ extern "C"
     // holds too_early in reads; for a sender, transmission errors hold
     // permission_denied and write_error in failed commits and out_of_space
     // in failed attempts to write. A kind the flow's side does not have has
-    // none, which BCP-008 answers with an empty collection.
+    // none, which BCP-008-01 and BCP-008-02 answer with an empty collection.
     // MXL_ERR_INVALID_ARG where a snapshot is not version 2 or baseline is
     // another flow or role.
     mxlStatus mxlMonitoringBcp008GetCounters(mxlMonitoringFlowSnapshot const* baseline, mxlMonitoringFlowSnapshot const* current,

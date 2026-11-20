@@ -82,13 +82,13 @@ namespace mxl::monitoring
             }
         }
 
-        void recordIssue(Flow& flow, mxlMonitoringContent issue, char const* detail, std::uint64_t index, std::uint64_t count)
+        void recordIssue(Flow& flow, mxlMonitoringEssence issue, char const* detail, std::uint64_t index, std::uint64_t count)
         {
-            if (issue == MXL_MONITORING_CONTENT_ILLEGAL_VALUES && *detail != '\0')
+            if (issue == MXL_MONITORING_ESSENCE_ILLEGAL_VALUES && *detail != '\0')
             {
-                flow.describeContent(issue, std::format("illegal sample value: {}", detail));
+                flow.describeEssence(issue, std::format("illegal sample value: {}", detail));
             }
-            mxlMonitoringRecordReadContent(toHandle(&flow), issue, index, count);
+            mxlMonitoringRecordReadEssence(toHandle(&flow), issue, index, count);
         }
 
         mxlStatus recordGrain(Flow& flow, mxlFlowReader reader, mxlStatus status, std::uint64_t index, mxlGrainInfo const* grain,
@@ -100,7 +100,7 @@ namespace mxl::monitoring
                 mxlMonitoringRecordRead(toHandle(&flow), status, index, 1);
                 return status;
             }
-            auto issue = mxlMonitoringContent{};
+            auto issue = mxlMonitoringEssence{};
             auto detail = std::array<char, MXL_MONITORING_TEXT>{};
             if (mxlMonitoringCheckGrain(&flow.declared, flow.mismatch.load(std::memory_order_relaxed), flow.checkLegal.load(std::memory_order_relaxed),
                     grain, index, payload, &issue, detail.data(), detail.size()))
@@ -124,7 +124,7 @@ namespace mxl::monitoring
                 mxlMonitoringRecordRead(toHandle(&flow), status, index, count);
                 return status;
             }
-            auto issue = mxlMonitoringContent{};
+            auto issue = mxlMonitoringEssence{};
             auto detail = std::array<char, MXL_MONITORING_TEXT>{};
             if (mxlMonitoringCheckSamples(&flow.declared, flow.mismatch.load(std::memory_order_relaxed),
                     flow.checkLegal.load(std::memory_order_relaxed), samples, &issue, detail.data(), detail.size()))
@@ -264,9 +264,9 @@ extern "C"
             if (!f->formatMismatch.empty())
             {
                 f->lastErrorDetail = "format differs from what was expected: " + f->formatMismatch;
-                for (auto const issue : {MXL_MONITORING_CONTENT_WRONG_FORMAT, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, MXL_MONITORING_CONTENT_WRONG_RATE})
+                for (auto const issue : {MXL_MONITORING_ESSENCE_WRONG_FORMAT, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, MXL_MONITORING_ESSENCE_WRONG_RATE})
                 {
-                    f->contentDetail[issue] = f->lastErrorDetail;
+                    f->essenceDetail[issue] = f->lastErrorDetail;
                 }
             }
         }

@@ -11,7 +11,7 @@
 #include <mxl/flow.h>
 #include <mxl/mxl.h>
 #include <mxl/time.h>
-#include "mxl-monitoring/content.h"
+#include "mxl-monitoring/essence.h"
 #include "mxl-monitoring/reader.h"
 #include "Support.hpp"
 
@@ -220,7 +220,7 @@ TEST_CASE("Grains read at the head count as OK, with their commit time", "[reade
     REQUIRE(reader.readGrain(index) == MXL_STATUS_OK);
     auto const s = reader.snapshot();
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 1);
-    CHECK(s.reads[MXL_MONITORING_READ_INVALID_CONTENT] == 0);
+    CHECK(s.reads[MXL_MONITORING_READ_INVALID_ESSENCE] == 0);
     CHECK(s.lastIndex == index);
     CHECK(s.delivering);
     CHECK(s.arrivalLatency.count == 1);
@@ -242,7 +242,7 @@ TEST_CASE("A slot taken as it stands, never written for its index, is missing", 
     INFO("taken as it stands, the slot still holds an older grain");
     REQUIRE(reader.readGrain(index + 1, MXL_GRAIN_VALID_SLICES_ANY) == MXL_STATUS_OK);
     auto const s = reader.snapshot();
-    CHECK(s.content[MXL_MONITORING_CONTENT_MISSING] == 1);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_MISSING] == 1);
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
 }
 
@@ -258,8 +258,8 @@ TEST_CASE("A grain a writer jumped over is invalid", "[reader]")
     INFO("libmxl marks the grain between them invalid as the writer opens index + 2");
     REQUIRE(reader.readGrain(index + 1) == MXL_STATUS_OK);
     auto const s = reader.snapshot();
-    CHECK(s.content[MXL_MONITORING_CONTENT_INVALID] == 1);
-    CHECK(s.content[MXL_MONITORING_CONTENT_MISSING] == 0);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_INVALID] == 1);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_MISSING] == 0);
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
 }
 
@@ -272,7 +272,7 @@ TEST_CASE("A grain left part-written is incomplete", "[reader]")
     auto const index = currentIndex();
     domain.writeGrain(index, 10);
     REQUIRE(reader.readGrain(index, MXL_GRAIN_VALID_SLICES_ANY) == MXL_STATUS_OK);
-    CHECK(reader.snapshot().content[MXL_MONITORING_CONTENT_INCOMPLETE] == 1);
+    CHECK(reader.snapshot().essence[MXL_MONITORING_ESSENCE_INCOMPLETE] == 1);
 }
 
 TEST_CASE("A grain the ring has overwritten is too late", "[reader]")
@@ -305,7 +305,7 @@ TEST_CASE("A flow other than expected counts every grain as wrong", "[reader]")
     domain.writeGrain(index);
     REQUIRE(reader.readGrain(index) == MXL_STATUS_OK);
     auto const s = reader.snapshot();
-    CHECK(s.content[MXL_MONITORING_CONTENT_WRONG_RESOLUTION] == 1);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_WRONG_RESOLUTION] == 1);
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
     CHECK(std::string{s.formatMismatch} == "96x54 where 1920x1080 was expected");
     CHECK(std::string{s.lastErrorDetail} == "format differs from what was expected: 96x54 where 1920x1080 was expected");
@@ -326,7 +326,7 @@ TEST_CASE("A flow other than expected counts every grain as wrong", "[reader]")
         }
         else
         {
-            CHECK(event.content == MXL_MONITORING_CONTENT_WRONG_RESOLUTION);
+            CHECK(event.essence == MXL_MONITORING_ESSENCE_WRONG_RESOLUTION);
             CHECK(std::string{event.detail} == "format differs from what was expected: 96x54 where 1920x1080 was expected");
         }
     }

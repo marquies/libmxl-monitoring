@@ -62,12 +62,12 @@ extern "C"
     // mismatch is what mxlMonitoringMismatch returned for the flow. detail,
     // when not NULL, receives where an illegal value sits.
     bool mxlMonitoringCheckGrain(mxlMonitoringDeclared const* declared, uint32_t mismatch, bool checkLegal, mxlGrainInfo const* grain,
-        uint64_t index, uint8_t const* payload, mxlMonitoringContent* issue, char* detail, size_t detailSize);
+        uint64_t index, uint8_t const* payload, mxlMonitoringEssence* issue, char* detail, size_t detailSize);
 
     // The same for a batch of samples. The legal range is checked for
     // audio/float32: finite and within -1..1.
     bool mxlMonitoringCheckSamples(mxlMonitoringDeclared const* declared, uint32_t mismatch, bool checkLegal,
-        mxlWrappedMultiBufferSlice const* samples, mxlMonitoringContent* issue, char* detail, size_t detailSize);
+        mxlWrappedMultiBufferSlice const* samples, mxlMonitoringEssence* issue, char* detail, size_t detailSize);
 
     // What the flow should carry, for the checks the reader wrappers run.
     mxlStatus mxlMonitoringSetExpectation(mxlMonitoringFlow flow, mxlMonitoringExpectation const* expected);

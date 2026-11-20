@@ -7,7 +7,7 @@ package "Process reading or writing MXL flows" {
   [Media loop\nreads / writes MXL flows] as Loop
   package "mxl-monitoring (static)" {
     [Wrappers\nreader.h / writer.h] as Wrap
-    [Content checks\ncontent.h] as Content
+    [Essence checks\nessence.h] as Essence
     [Core model\nmonitoring.h\nflows, counters,\nsnapshots, events] as Core
   }
   package "Exporters (static, optional)" {
@@ -22,7 +22,7 @@ cloud "OTel Collector" as Collector
 
 Loop --> Wrap : libmxl calls
 Wrap --> Mxl : forwards unchanged
-Wrap --> Content : check grains / samples
+Wrap --> Essence : check grains / samples
 Wrap --> Core : record outcome\n(atomics, never blocks)
 Loop --> Core : mxlMonitoringPoll\n(one thread)
 Prom --> Core : snapshot

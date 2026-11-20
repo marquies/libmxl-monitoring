@@ -178,50 +178,50 @@ TEST_CASE("A read that cannot be done leaves the flow unusable until data moves"
     CHECK(context.snapshot().access == MXL_MONITORING_ACCESS_OPEN);
 }
 
-TEST_CASE("A flow that goes away under a reader is a loss, not a read error", "[recording]")
+TEST_CASE("A flow that goes away under a reader is a loss of access, not a read error", "[recording]")
 {
     auto context = Context{};
     auto const flow = context.open();
     mxlMonitoringRecordRead(flow, MXL_ERR_FLOW_INVALID, 5, 1);
     auto s = context.snapshot();
-    CHECK(s.losses == 1);
+    CHECK(s.accessLosses == 1);
     CHECK(s.access == MXL_MONITORING_ACCESS_FLOW_INVALID);
     CHECK(s.reads[MXL_MONITORING_READ_ERROR] == 0);
-    INFO("a loss is not a failed attempt to open");
+    INFO("a loss of access is not a failed attempt to open");
     CHECK(s.accessFailures[MXL_MONITORING_ACCESS_FLOW_INVALID] == 0);
 
     INFO("retrying the read before reopening loses the flow only once");
     mxlMonitoringRecordRead(flow, MXL_ERR_FLOW_NOT_FOUND, 5, 1);
     s = context.snapshot();
-    CHECK(s.losses == 1);
+    CHECK(s.accessLosses == 1);
     CHECK(s.access == MXL_MONITORING_ACCESS_FLOW_NOT_FOUND);
 
     mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
     mxlMonitoringRecordRead(flow, MXL_ERR_INVALID_FLOW_READER, 6, 1);
-    CHECK(context.snapshot().losses == 2);
+    CHECK(context.snapshot().accessLosses == 2);
 }
 
-TEST_CASE("Only the statuses that mean the flow went away are losses", "[recording]")
+TEST_CASE("Only the statuses that mean the flow went away are losses of access", "[recording]")
 {
     auto context = Context{};
     auto const flow = context.open();
     mxlMonitoringRecordRead(flow, MXL_ERR_NOT_FOUND, 5, 1);
     auto const s = context.snapshot();
-    CHECK(s.losses == 0);
+    CHECK(s.accessLosses == 0);
     CHECK(s.reads[MXL_MONITORING_READ_ERROR] == 1);
 }
 
-TEST_CASE("Wrong content counts instead of OK, never as both", "[recording]")
+TEST_CASE("Wrong essence counts instead of OK, never as both", "[recording]")
 {
     auto context = Context{};
     auto const flow = context.open();
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_WRONG_FORMAT, 1, 480);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_MISSING, 2, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_WRONG_FORMAT, 1, 480);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_MISSING, 2, 1);
     auto const s = context.snapshot();
     CHECK(s.reads[MXL_MONITORING_READ_OK] == 0);
-    CHECK(s.reads[MXL_MONITORING_READ_INVALID_CONTENT] == 481);
-    CHECK(s.content[MXL_MONITORING_CONTENT_WRONG_FORMAT] == 480);
-    CHECK(s.content[MXL_MONITORING_CONTENT_MISSING] == 1);
+    CHECK(s.reads[MXL_MONITORING_READ_INVALID_ESSENCE] == 481);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_WRONG_FORMAT] == 480);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_MISSING] == 1);
     INFO("data arrived, so the flow delivers");
     CHECK(s.delivering);
 }
@@ -236,7 +236,7 @@ TEST_CASE("Writes count commits, the outcomes only the writer sees, and their la
     mxlMonitoringRecordWrite(flow, MXL_STATUS_OK, index, 1);
     mxlMonitoringRecordWriteOutcome(flow, MXL_MONITORING_WRITE_INPUT_LATE, MXL_STATUS_OK, index + 1, 3);
     mxlMonitoringRecordWriteOutcome(flow, MXL_MONITORING_WRITE_OUT_OF_SPACE, MXL_ERR_UNKNOWN, index + 4, 1);
-    mxlMonitoringRecordWriteContent(flow, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, index + 5, 1);
+    mxlMonitoringRecordWriteEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, index + 5, 1);
     mxlMonitoringRecordWrite(flow, MXL_ERR_PERMISSION_DENIED, index + 6, 1);
 
     auto const s = context.snapshot();
@@ -245,7 +245,7 @@ TEST_CASE("Writes count commits, the outcomes only the writer sees, and their la
     CHECK(s.writes[MXL_MONITORING_WRITE_OUT_OF_SPACE] == 1);
     CHECK(s.writes[MXL_MONITORING_WRITE_INVALID_INPUT] == 1);
     CHECK(s.writes[MXL_MONITORING_WRITE_PERMISSION_DENIED] == 1);
-    CHECK(s.content[MXL_MONITORING_CONTENT_WRONG_RESOLUTION] == 1);
+    CHECK(s.essence[MXL_MONITORING_ESSENCE_WRONG_RESOLUTION] == 1);
     CHECK(s.access == MXL_MONITORING_ACCESS_PERMISSION_DENIED);
     CHECK(s.commitLatency.count == 1);
     CHECK(s.commitLatency.sumNs == 8 * Ms);
@@ -278,11 +278,11 @@ TEST_CASE("Bad arguments are refused rather than recorded", "[recording]")
     auto context = Context{};
     auto const flow = context.add();
     mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_COUNT, MXL_STATUS_OK);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_COUNT, 0, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_COUNT, 0, 1);
     mxlMonitoringRecordRead(nullptr, MXL_STATUS_OK, 0, 1);
     auto const s = context.snapshot();
     CHECK(s.access == MXL_MONITORING_ACCESS_STARTING);
-    CHECK(s.reads[MXL_MONITORING_READ_INVALID_CONTENT] == 0);
+    CHECK(s.reads[MXL_MONITORING_READ_INVALID_ESSENCE] == 0);
 
     auto config = mxlMonitoringConfig{};
     auto other = mxlMonitoring{};
@@ -342,7 +342,7 @@ TEST_CASE("Ids are names up to the length a snapshot carries", "[recording]")
     CHECK(mxlMonitoringAddFlow(context.monitoring, tooLong.c_str(), MXL_MONITORING_ROLE_WRITER, &flow) == MXL_ERR_INVALID_ARG);
 }
 
-TEST_CASE("Every read and write outcome and content issue has its OTLP name", "[recording]")
+TEST_CASE("Every read and write outcome and essence issue has its OTLP name", "[recording]")
 {
     auto const read = [](mxlMonitoringRead r) { return std::string{mxlMonitoringReadName(r)}; };
     CHECK(read(MXL_MONITORING_READ_OK) == "ok");
@@ -350,7 +350,7 @@ TEST_CASE("Every read and write outcome and content issue has its OTLP name", "[
     CHECK(read(MXL_MONITORING_READ_TOO_LATE) == "too_late");
     CHECK(read(MXL_MONITORING_READ_PERMISSION_DENIED) == "permission_denied");
     CHECK(read(MXL_MONITORING_READ_ERROR) == "read_error");
-    CHECK(read(MXL_MONITORING_READ_INVALID_CONTENT) == "invalid_content");
+    CHECK(read(MXL_MONITORING_READ_INVALID_ESSENCE) == "invalid_essence");
     CHECK(read(MXL_MONITORING_READ_COUNT) == "unknown");
     auto const write = [](mxlMonitoringWrite w) { return std::string{mxlMonitoringWriteName(w)}; };
     CHECK(write(MXL_MONITORING_WRITE_OK) == "ok");
@@ -360,10 +360,10 @@ TEST_CASE("Every read and write outcome and content issue has its OTLP name", "[
     CHECK(write(MXL_MONITORING_WRITE_OUT_OF_SPACE) == "out_of_space");
     CHECK(write(MXL_MONITORING_WRITE_ERROR) == "write_error");
     CHECK(write(MXL_MONITORING_WRITE_COUNT) == "unknown");
-    CHECK(std::string{mxlMonitoringContentName(MXL_MONITORING_CONTENT_WRONG_FORMAT)} == "wrong_format");
-    CHECK(std::string{mxlMonitoringContentName(MXL_MONITORING_CONTENT_ILLEGAL_VALUES)} == "illegal_values");
+    CHECK(std::string{mxlMonitoringEssenceName(MXL_MONITORING_ESSENCE_WRONG_FORMAT)} == "wrong_format");
+    CHECK(std::string{mxlMonitoringEssenceName(MXL_MONITORING_ESSENCE_ILLEGAL_VALUES)} == "illegal_values");
     INFO("the count stands for no issue, which has no name");
-    CHECK(mxlMonitoringContentName(MXL_MONITORING_CONTENT_COUNT) == nullptr);
+    CHECK(mxlMonitoringEssenceName(MXL_MONITORING_ESSENCE_COUNT) == nullptr);
 }
 
 TEST_CASE("Every access state has mxl-reader's name", "[recording]")
@@ -413,7 +413,7 @@ TEST_CASE("The last failure's text is there without a snapshot, and layouts carr
 {
     auto context = Context{};
     auto const flow = context.add();
-    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_ACCESS, MXL_MONITORING_ACCESS_OTHER, MXL_MONITORING_CONTENT_COUNT,
+    REQUIRE(mxlMonitoringDescribe(flow, MXL_MONITORING_CONDITION_ACCESS, MXL_MONITORING_ACCESS_OTHER, MXL_MONITORING_ESSENCE_COUNT,
                 "cannot open flow x: status 1") == MXL_STATUS_OK);
     char text[MXL_MONITORING_TEXT];
     REQUIRE(mxlMonitoringGetLastErrorDetail(flow, text, sizeof(text)) == MXL_STATUS_OK);

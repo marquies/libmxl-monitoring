@@ -301,7 +301,7 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     deliver(context, reader, 10);
     mxlMonitoringRecordRead(reader, MXL_ERR_OUT_OF_RANGE_TOO_LATE, context.dueIndex(), 1);
     mxlMonitoringRecordRead(reader, MXL_ERR_OUT_OF_RANGE_TOO_LATE, context.dueIndex(), 1);
-    mxlMonitoringRecordReadContent(reader, MXL_MONITORING_CONTENT_INVALID, context.dueIndex(), 1);
+    mxlMonitoringRecordReadEssence(reader, MXL_MONITORING_ESSENCE_INVALID, context.dueIndex(), 1);
     auto const writerId = "d4d00000-0000-0000-0000-000000000002";
     auto const writer = context.open(MXL_MONITORING_ROLE_WRITER, writerId);
     mxlMonitoringRecordWrite(writer, MXL_STATUS_OK, context.dueIndex(), 1);
@@ -340,16 +340,16 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     auto const tooLate = point(reads, withAttribute("mxl.read.result", "too_late"));
     REQUIRE(tooLate);
     CHECK(intValue(*tooLate) == "2");
-    INFO("invalid content is counted per issue, never as a total beside them");
-    auto invalid = withAttribute("mxl.read.result", "invalid_content");
-    invalid["mxl.content.issue"] = "invalid";
+    INFO("invalid essence is counted per issue, never as a total beside them");
+    auto invalid = withAttribute("mxl.read.result", "invalid_essence");
+    invalid["mxl.essence.issue"] = "invalid";
     auto const invalidPoint = point(reads, invalid);
     REQUIRE(invalidPoint);
     CHECK(intValue(*invalidPoint) == "1");
     for (auto const& p : list(reads.data, "dataPoints"))
     {
         auto const a = attributes(p);
-        CHECK((a.at("mxl.read.result") != "invalid_content" || a.contains("mxl.content.issue")));
+        CHECK((a.at("mxl.read.result") != "invalid_essence" || a.contains("mxl.essence.issue")));
     }
 
     auto const state = point(m.at("mxl.flow.state"), withAttribute("mxl.flow.state", "open"));
@@ -357,6 +357,10 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     CHECK(intValue(*state) == "1");
     CHECK(point(m.at("mxl.flow.open.failures"), withAttribute("mxl.open.failure", "flow_not_found")));
     CHECK(point(m.at("mxl.reader.delivering"), flow));
+    INFO("losses of access have a name of their own, apart from the BCP-008-01 sense of lost grains");
+    REQUIRE(m.contains("mxl.flow.access.losses"));
+    CHECK(point(m.at("mxl.flow.access.losses"), flow));
+    CHECK(!m.contains("mxl.flow.reopens"));
     INFO("a gauge of unit 1 would reach Prometheus with _ratio appended");
     auto unit = [&](char const* name) { return at(m.at(name).json, "unit").get<std::string>(); };
     CHECK(unit("mxl.flow.state") == "{state}");
@@ -367,7 +371,7 @@ TEST_CASE("Flows are exported as OTLP metrics under their OTLP names", "[otlp]")
     REQUIRE(m.contains("mxl.reader.arrival.latency"));
     auto const arrival = point(m.at("mxl.reader.arrival.latency"), flow);
     REQUIRE(arrival);
-    INFO("ten good grains and one with invalid content arrived");
+    INFO("ten good grains and one with invalid essence arrived");
     CHECK(field(*arrival, "count") == "11");
     CHECK(list(*arrival, "explicitBounds").size() == MXL_MONITORING_LATENCY_BUCKETS - 1);
     CHECK(list(*arrival, "bucketCounts").size() == MXL_MONITORING_LATENCY_BUCKETS);
