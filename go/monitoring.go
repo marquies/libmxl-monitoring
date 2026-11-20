@@ -80,7 +80,7 @@ const (
 	ReadTooLate          Read = C.MXL_MONITORING_READ_TOO_LATE
 	ReadPermissionDenied Read = C.MXL_MONITORING_READ_PERMISSION_DENIED
 	ReadError            Read = C.MXL_MONITORING_READ_ERROR
-	ReadInvalidContent   Read = C.MXL_MONITORING_READ_INVALID_CONTENT
+	ReadInvalidEssence   Read = C.MXL_MONITORING_READ_INVALID_ESSENCE
 	ReadCount                 = C.MXL_MONITORING_READ_COUNT
 )
 
@@ -106,24 +106,24 @@ func (w Write) String() string {
 	return C.GoString(C.mxlMonitoringWriteName(C.mxlMonitoringWrite(w)))
 }
 
-// Content is how data read, or input given to a writer, is wrong.
-type Content int32
+// Essence is how data read, or input given to a writer, is wrong.
+type Essence int32
 
-// Content issues.
+// Essence issues.
 const (
-	ContentWrongFormat     Content = C.MXL_MONITORING_CONTENT_WRONG_FORMAT
-	ContentWrongResolution Content = C.MXL_MONITORING_CONTENT_WRONG_RESOLUTION
-	ContentWrongRate       Content = C.MXL_MONITORING_CONTENT_WRONG_RATE
-	ContentWrongSize       Content = C.MXL_MONITORING_CONTENT_WRONG_SIZE
-	ContentMissing         Content = C.MXL_MONITORING_CONTENT_MISSING
-	ContentInvalid         Content = C.MXL_MONITORING_CONTENT_INVALID
-	ContentIncomplete      Content = C.MXL_MONITORING_CONTENT_INCOMPLETE
-	ContentIllegalValues   Content = C.MXL_MONITORING_CONTENT_ILLEGAL_VALUES
-	ContentCount                   = C.MXL_MONITORING_CONTENT_COUNT
+	EssenceWrongFormat     Essence = C.MXL_MONITORING_ESSENCE_WRONG_FORMAT
+	EssenceWrongResolution Essence = C.MXL_MONITORING_ESSENCE_WRONG_RESOLUTION
+	EssenceWrongRate       Essence = C.MXL_MONITORING_ESSENCE_WRONG_RATE
+	EssenceWrongSize       Essence = C.MXL_MONITORING_ESSENCE_WRONG_SIZE
+	EssenceMissing         Essence = C.MXL_MONITORING_ESSENCE_MISSING
+	EssenceInvalid         Essence = C.MXL_MONITORING_ESSENCE_INVALID
+	EssenceIncomplete      Essence = C.MXL_MONITORING_ESSENCE_INCOMPLETE
+	EssenceIllegalValues   Essence = C.MXL_MONITORING_ESSENCE_ILLEGAL_VALUES
+	EssenceCount                   = C.MXL_MONITORING_ESSENCE_COUNT
 )
 
-func (c Content) String() string {
-	return C.GoString(C.mxlMonitoringContentName(C.mxlMonitoringContent(c)))
+func (c Essence) String() string {
+	return C.GoString(C.mxlMonitoringEssenceName(C.mxlMonitoringEssence(c)))
 }
 
 // status turns what a go-mxl call returned into the libmxl status it carries.
@@ -265,8 +265,8 @@ func (f *Flow) SetTiming(grace, stallTimeout time.Duration) error {
 
 // RecordAccess records an attempt to open a reader or writer on the flow:
 // the error of the go-mxl call, nil for success. As in the reader wrappers,
-// replaced data fails an open as AccessOther; it is a loss only under a
-// reader or writer already open.
+// replaced data fails an open as AccessOther; it is a loss of access only
+// under a reader or writer already open.
 func (f *Flow) RecordAccess(err error) {
 	access := AccessOpen
 	if err != nil {
@@ -296,13 +296,13 @@ func (f *Flow) RecordRead(err error, index, count uint64) {
 	C.mxlMonitoringRecordRead(f.c, status(err), C.uint64_t(index), C.uint64_t(count))
 }
 
-// RecordReadContent records data read that turned out wrong, in place of
+// RecordReadEssence records data read that turned out wrong, in place of
 // RecordRead for that read.
-func (f *Flow) RecordReadContent(issue Content, index, count uint64) {
+func (f *Flow) RecordReadEssence(issue Essence, index, count uint64) {
 	if f == nil {
 		return
 	}
-	C.mxlMonitoringRecordReadContent(f.c, C.mxlMonitoringContent(issue), C.uint64_t(index), C.uint64_t(count))
+	C.mxlMonitoringRecordReadEssence(f.c, C.mxlMonitoringEssence(issue), C.uint64_t(index), C.uint64_t(count))
 }
 
 // RecordSkipped records grains or samples jumped over after a too-late read.
@@ -339,12 +339,12 @@ func (f *Flow) RecordWriteOutcome(outcome Write, err error, index, count uint64)
 	C.mxlMonitoringRecordWriteOutcome(f.c, C.mxlMonitoringWrite(outcome), status(err), C.uint64_t(index), C.uint64_t(count))
 }
 
-// RecordWriteContent records input found wrong before writing.
-func (f *Flow) RecordWriteContent(issue Content, index, count uint64) {
+// RecordWriteEssence records input found wrong before writing.
+func (f *Flow) RecordWriteEssence(issue Essence, index, count uint64) {
 	if f == nil {
 		return
 	}
-	C.mxlMonitoringRecordWriteContent(f.c, C.mxlMonitoringContent(issue), C.uint64_t(index), C.uint64_t(count))
+	C.mxlMonitoringRecordWriteEssence(f.c, C.mxlMonitoringEssence(issue), C.uint64_t(index), C.uint64_t(count))
 }
 
 // RecordInput records when the input for index arrived.
@@ -381,7 +381,7 @@ func histogram(c *C.mxlMonitoringHistogram) Histogram {
 }
 
 // Snapshot is a copy of one flow's counts. Count arrays are indexed by
-// Access, Read, Write and Content.
+// Access, Read, Write and Essence.
 type Snapshot struct {
 	FlowID         string
 	Target         string
@@ -393,10 +393,10 @@ type Snapshot struct {
 	Access         Access
 	AccessFailures [AccessCount]uint64
 	Opens          uint64
-	Losses         uint64
+	AccessLosses   uint64
 	Reads          [ReadCount]uint64
 	Writes         [WriteCount]uint64
-	Content        [ContentCount]uint64
+	Essence        [EssenceCount]uint64
 	Skipped        uint64
 	Stalls         uint64
 	LastError      error
@@ -445,15 +445,15 @@ func (m *Monitoring) Snapshot() ([]Snapshot, error) {
 			s.AccessFailures[j] = uint64(c.accessFailures[j])
 		}
 		s.Opens = uint64(c.opens)
-		s.Losses = uint64(c.losses)
+		s.AccessLosses = uint64(c.accessLosses)
 		for j := range s.Reads {
 			s.Reads[j] = uint64(c.reads[j])
 		}
 		for j := range s.Writes {
 			s.Writes[j] = uint64(c.writes[j])
 		}
-		for j := range s.Content {
-			s.Content[j] = uint64(c.content[j])
+		for j := range s.Essence {
+			s.Essence[j] = uint64(c.essence[j])
 		}
 		s.Skipped = uint64(c.skipped)
 		s.Stalls = uint64(c.stalls)

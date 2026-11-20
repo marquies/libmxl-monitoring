@@ -73,8 +73,8 @@ extern "C"
         MXL_MONITORING_READ_TOO_LATE,
         MXL_MONITORING_READ_PERMISSION_DENIED,
         MXL_MONITORING_READ_ERROR,
-        // Read, but wrong; the mxlMonitoringContent counts say how.
-        MXL_MONITORING_READ_INVALID_CONTENT,
+        // Read, but wrong; the mxlMonitoringEssence counts say how.
+        MXL_MONITORING_READ_INVALID_ESSENCE,
         MXL_MONITORING_READ_COUNT,
     } mxlMonitoringRead;
 
@@ -83,7 +83,7 @@ extern "C"
         MXL_MONITORING_WRITE_OK,
         // Nothing arrived in time to write.
         MXL_MONITORING_WRITE_INPUT_LATE,
-        // The input was wrong; the mxlMonitoringContent counts say how.
+        // The input was wrong; the mxlMonitoringEssence counts say how.
         MXL_MONITORING_WRITE_INVALID_INPUT,
         MXL_MONITORING_WRITE_PERMISSION_DENIED,
         MXL_MONITORING_WRITE_OUT_OF_SPACE,
@@ -91,33 +91,33 @@ extern "C"
         MXL_MONITORING_WRITE_COUNT,
     } mxlMonitoringWrite;
 
-    // How content is wrong, for what a reader read and what a writer was given.
-    typedef enum mxlMonitoringContent
+    // How essence is wrong, for what a reader read and what a writer was given.
+    typedef enum mxlMonitoringEssence
     {
-        MXL_MONITORING_CONTENT_WRONG_FORMAT,     // media type, channels or another format property
-        MXL_MONITORING_CONTENT_WRONG_RESOLUTION, // width or height
-        MXL_MONITORING_CONTENT_WRONG_RATE,       // grain or sample rate
-        MXL_MONITORING_CONTENT_WRONG_SIZE,       // payload size does not match the format
+        MXL_MONITORING_ESSENCE_WRONG_FORMAT,     // media type, channels or another format property
+        MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, // width or height
+        MXL_MONITORING_ESSENCE_WRONG_RATE,       // grain or sample rate
+        MXL_MONITORING_ESSENCE_WRONG_SIZE,       // payload size does not match the format
         // The ring slot holds another index's grain: this one was never written.
-        MXL_MONITORING_CONTENT_MISSING,
+        MXL_MONITORING_ESSENCE_MISSING,
         // Marked MXL_GRAIN_FLAG_INVALID by its writer, e.g. to fill a gap.
-        MXL_MONITORING_CONTENT_INVALID,
-        MXL_MONITORING_CONTENT_INCOMPLETE,     // fewer valid slices than total
-        MXL_MONITORING_CONTENT_ILLEGAL_VALUES, // values outside the legal range of the format
-        MXL_MONITORING_CONTENT_COUNT,
-    } mxlMonitoringContent;
+        MXL_MONITORING_ESSENCE_INVALID,
+        MXL_MONITORING_ESSENCE_INCOMPLETE,     // fewer valid slices than total
+        MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, // values outside the legal range of the format
+        MXL_MONITORING_ESSENCE_COUNT,
+    } mxlMonitoringEssence;
 
-    // One word per read outcome, write outcome and content issue, as the OTLP
+    // One word per read outcome, write outcome and essence issue, as the OTLP
     // exporter names them: ok, too_early, too_late, permission_denied,
-    // read_error, invalid_content; ok, input_late, invalid_input,
+    // read_error, invalid_essence; ok, input_late, invalid_input,
     // permission_denied, out_of_space, write_error; wrong_format,
     // wrong_resolution, wrong_rate, wrong_size, missing, invalid, incomplete,
-    // illegal_values. The Prometheus text keeps the names mxl-reader's
-    // /metrics had. mxlMonitoringContentName returns NULL for
-    // MXL_MONITORING_CONTENT_COUNT, which stands for no issue.
+    // illegal_values. The Prometheus text of a reader keeps the names
+    // mxl-reader's /metrics had. mxlMonitoringEssenceName returns NULL for
+    // MXL_MONITORING_ESSENCE_COUNT, which stands for no issue.
     char const* mxlMonitoringReadName(mxlMonitoringRead read);
     char const* mxlMonitoringWriteName(mxlMonitoringWrite write);
-    char const* mxlMonitoringContentName(mxlMonitoringContent content);
+    char const* mxlMonitoringEssenceName(mxlMonitoringEssence essence);
 
     // What a libmxl status means for each kind of call.
     //
@@ -223,9 +223,9 @@ extern "C"
     // the flow is opened again.
     void mxlMonitoringRecordRead(mxlMonitoringFlow flow, mxlStatus status, uint64_t index, uint64_t count);
 
-    // Data read that turned out wrong. Counted as INVALID_CONTENT instead of
+    // Data read that turned out wrong. Counted as INVALID_ESSENCE instead of
     // OK, never as both.
-    void mxlMonitoringRecordReadContent(mxlMonitoringFlow flow, mxlMonitoringContent issue, uint64_t index, uint64_t count);
+    void mxlMonitoringRecordReadEssence(mxlMonitoringFlow flow, mxlMonitoringEssence issue, uint64_t index, uint64_t count);
 
     // Grains or samples jumped over after TOO_LATE to reach the head again.
     void mxlMonitoringRecordSkipped(mxlMonitoringFlow flow, uint64_t count);
@@ -239,7 +239,7 @@ extern "C"
     // The result of committing a grain or samples, or of failing to open them
     // for writing. An OK commit counts its units and observes the commit
     // latency at the time of the call; any other outcome counts one
-    // occurrence. Losses and access follow as for reads.
+    // occurrence. Losses of access and access follow as for reads.
     void mxlMonitoringRecordWrite(mxlMonitoringFlow flow, mxlStatus status, uint64_t index, uint64_t count);
 
     // The two write outcomes no libmxl status carries, counted in units:
@@ -249,7 +249,7 @@ extern "C"
     void mxlMonitoringRecordWriteOutcome(mxlMonitoringFlow flow, mxlMonitoringWrite outcome, mxlStatus status, uint64_t index, uint64_t count);
 
     // Input found wrong before writing. Counted as INVALID_INPUT.
-    void mxlMonitoringRecordWriteContent(mxlMonitoringFlow flow, mxlMonitoringContent issue, uint64_t index, uint64_t count);
+    void mxlMonitoringRecordWriteEssence(mxlMonitoringFlow flow, mxlMonitoringEssence issue, uint64_t index, uint64_t count);
 
     // When the input for index arrived, for a writer's input latency.
     void mxlMonitoringRecordInput(mxlMonitoringFlow flow, uint64_t index, uint64_t arrivalNs);
@@ -293,13 +293,13 @@ extern "C"
         uint64_t accessFailures[MXL_MONITORING_ACCESS_COUNT];
         uint64_t opens;
         // Times an open flow went away.
-        uint64_t losses;
+        uint64_t accessLosses;
 
-        // OK, INVALID_CONTENT, INVALID_INPUT, INPUT_LATE, OUT_OF_SPACE and
-        // content in units of `unit`; every other outcome in occurrences.
+        // OK, INVALID_ESSENCE, INVALID_INPUT, INPUT_LATE, OUT_OF_SPACE and
+        // essence in units of `unit`; every other outcome in occurrences.
         uint64_t reads[MXL_MONITORING_READ_COUNT];
         uint64_t writes[MXL_MONITORING_WRITE_COUNT];
-        uint64_t content[MXL_MONITORING_CONTENT_COUNT];
+        uint64_t essence[MXL_MONITORING_ESSENCE_COUNT];
         uint64_t skipped;
         uint64_t stalls;
 
@@ -332,8 +332,8 @@ extern "C"
     mxlStatus mxlMonitoringSnapshot(mxlMonitoring monitoring, mxlMonitoringFlowSnapshot* snapshots, size_t* count);
 
     // A condition is one way a flow is failing: one access failure, one read
-    // or write outcome, or, for INVALID_CONTENT and INVALID_INPUT, one
-    // content issue, so wrong format and illegal values notify separately.
+    // or write outcome, or, for INVALID_ESSENCE and INVALID_INPUT, one
+    // essence issue, so wrong format and illegal values notify separately.
     typedef enum mxlMonitoringConditionKind
     {
         MXL_MONITORING_CONDITION_ACCESS,
@@ -343,11 +343,11 @@ extern "C"
 
     // What the events of one condition say, for a caller recording by hand:
     // kind and outcome name the condition as in mxlMonitoringEvent (outcome
-    // an mxlMonitoringAccess, -Read or -Write value), content the issue for
-    // INVALID_CONTENT and INVALID_INPUT. The reader wrappers describe what
+    // an mxlMonitoringAccess, -Read or -Write value), essence the issue for
+    // INVALID_ESSENCE and INVALID_INPUT. The reader wrappers describe what
     // they record themselves. Not for a hot path: it takes a lock and copies
     // the text.
-    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
+    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringEssence essence,
         char const* detail);
 
     typedef enum mxlMonitoringPhase
@@ -377,9 +377,9 @@ extern "C"
             mxlMonitoringRead read;
             mxlMonitoringWrite write;
         };
-        // For INVALID_CONTENT and INVALID_INPUT; MXL_MONITORING_CONTENT_COUNT
+        // For INVALID_ESSENCE and INVALID_INPUT; MXL_MONITORING_ESSENCE_COUNT
         // otherwise.
-        mxlMonitoringContent content;
+        mxlMonitoringEssence essence;
 
         mxlStatus status; // the last libmxl status of the condition
         uint64_t index;   // the last affected grain or sample

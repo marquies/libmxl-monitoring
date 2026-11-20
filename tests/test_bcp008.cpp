@@ -1,4 +1,4 @@
-// What a BCP-008 monitor is handed for a flow. A Node polls a snapshot per
+// What a BCP-008-01 or BCP-008-02 monitor is handed for a flow. A Node polls a snapshot per
 // flow, so every status is judged on what happened between two snapshots:
 // a fault counted before the previous one has already been reported, and
 // reporting it again would hold the monitor unhealthy forever.
@@ -147,28 +147,43 @@ TEST_CASE("Grains lost or late since the previous snapshot make the connection u
     CHECK(std::string{s.connection.message} == "1 late read");
 }
 
-TEST_CASE("The stream status is the worst content issue read since the previous snapshot", "[bcp008]")
+TEST_CASE("A too late read counts only through the grains skipped after it", "[bcp008]")
+{
+    auto context = Context{};
+    auto const flow = context.open();
+    keepUp(context, flow, 3);
+    auto const before = context.snapshot();
+    mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, context.dueIndex() - 10, 1);
+    keepUp(context, flow, 1);
+    auto const current = context.snapshot();
+    INFO("the overtaking itself is neither a failed read nor a late one");
+    CHECK(statuses(&before, current).connection.status == MXL_MONITORING_BCP008_HEALTHY);
+    CHECK(counters(&before, current, MXL_MONITORING_BCP008_LOST) == std::vector<Named>{{"skipped", 0}, {"missing", 0}});
+    CHECK(counters(&before, current, MXL_MONITORING_BCP008_LATE) == std::vector<Named>{{"too_early", 0}});
+}
+
+TEST_CASE("The stream status is the worst essence issue read since the previous snapshot", "[bcp008]")
 {
     auto context = Context{};
     auto const flow = context.open();
     keepUp(context, flow, 3);
     auto const before = context.snapshot();
 
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_INCOMPLETE, context.dueIndex(), 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_INCOMPLETE, context.dueIndex(), 1);
     auto s = statuses(&before, context.snapshot());
     CHECK(s.stream.status == MXL_MONITORING_BCP008_PARTIALLY_HEALTHY);
     CHECK(std::string{s.stream.message} == "1 grain incomplete");
 
     INFO("invalid comes after wrong resolution in the enum, and outweighs it");
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, context.dueIndex(), 1);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_INVALID, context.dueIndex(), 2);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, context.dueIndex(), 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_INVALID, context.dueIndex(), 2);
     s = statuses(&before, context.snapshot());
     CHECK(s.stream.status == MXL_MONITORING_BCP008_UNHEALTHY);
     CHECK(std::string{s.stream.message} == "2 grains invalid");
 
     INFO("a missing grain was lost on the way, not decoded at all");
     auto const after = context.snapshot();
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_MISSING, context.dueIndex(), 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_MISSING, context.dueIndex(), 1);
     s = statuses(&after, context.snapshot());
     CHECK(s.stream.status == MXL_MONITORING_BCP008_UNCHANGED);
     CHECK(s.connection.status == MXL_MONITORING_BCP008_UNHEALTHY);
@@ -206,7 +221,7 @@ TEST_CASE("A failed commit makes the transmission unhealthy, late input only the
     s = statuses(&some, context.snapshot());
     CHECK(s.stream.status == MXL_MONITORING_BCP008_UNHEALTHY);
 
-    mxlMonitoringRecordWriteContent(flow, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, context.dueIndex(), 1);
+    mxlMonitoringRecordWriteEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, context.dueIndex(), 1);
     s = statuses(&before, context.snapshot());
     CHECK(s.stream.status == MXL_MONITORING_BCP008_UNHEALTHY);
     CHECK(std::string{s.stream.message} == "1 grain of invalid input, wrong_resolution");
@@ -274,7 +289,7 @@ TEST_CASE("A receiver's lost and late counters count since the last reset", "[bc
     auto context = Context{};
     auto const flow = context.open();
     mxlMonitoringRecordSkipped(flow, 3);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_MISSING, context.dueIndex(), 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_MISSING, context.dueIndex(), 1);
     CHECK(counters(nullptr, context.snapshot(), MXL_MONITORING_BCP008_LOST) == std::vector<Named>{{"skipped", 3}, {"missing", 1}});
 
     auto const reset = context.snapshot();
@@ -284,7 +299,7 @@ TEST_CASE("A receiver's lost and late counters count since the last reset", "[bc
     mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_EARLY, index, 1);
     CHECK(counters(&reset, context.snapshot(), MXL_MONITORING_BCP008_LOST) == std::vector<Named>{{"skipped", 2}, {"missing", 0}});
     CHECK(counters(&reset, context.snapshot(), MXL_MONITORING_BCP008_LATE) == std::vector<Named>{{"too_early", 1}});
-    INFO("a receiver has no transmission errors, which BCP-008 answers with an empty collection");
+    INFO("a receiver has no transmission errors, which BCP-008-01 answers with an empty collection");
     CHECK(counters(&reset, context.snapshot(), MXL_MONITORING_BCP008_TRANSMISSION_ERROR).empty());
 }
 
@@ -385,7 +400,7 @@ TEST_CASE("Messages name samples for a continuous flow, and the format a flow di
     auto current = previous;
     current.unit = MXL_MONITORING_UNIT_SAMPLE;
     current.skipped += 480;
-    current.content[MXL_MONITORING_CONTENT_WRONG_RATE] += 1;
+    current.essence[MXL_MONITORING_ESSENCE_WRONG_RATE] += 1;
     std::snprintf(current.formatMismatch, sizeof(current.formatMismatch), "sample rate 44100/1, expected 48000/1");
     auto const s = statuses(&previous, current);
     CHECK(std::string{s.connection.message} == "480 samples lost");

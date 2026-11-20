@@ -3,7 +3,7 @@
 // records on, calls it, records the result on the flow and returns the libmxl
 // status unchanged. What only the writer knows, input that came too late or
 // was wrong, it records with mxlMonitoringRecordWriteOutcome and
-// mxlMonitoringRecordWriteContent. The instance comes from
+// mxlMonitoringRecordWriteEssence. The instance comes from
 // mxlMonitoringCreateInstance in reader.h, which keeps the domain on the flow.
 
 #pragma once

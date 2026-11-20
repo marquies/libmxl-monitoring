@@ -34,12 +34,12 @@ carries those dependencies only when it links that exporter.
 
 ## Layers
 
-| Layer | Content | Source |
+| Layer | Covers | Source |
 | --- | --- | --- |
 | Classification | every `mxlStatus` of an open, read or write -> access, read or write outcome | `mxlMonitoringClassify*` |
-| Content checks | format, resolution, rate, size, missing, invalid, incomplete, illegal values | the flow definition, `mxlGrainInfo`, the payload (`content.h`) |
+| Essence checks | format, resolution, rate, size, missing, invalid, incomplete, illegal values | the flow definition, `mxlGrainInfo`, the payload (`essence.h`) |
 | Wrappers | libmxl reader and writer calls that classify, time and check their own result and return the status unchanged | `reader.h`, `writer.h` |
-| Application reports | what no libmxl status carries: input late, out of space, invalid input | `mxlMonitoringRecordWriteOutcome`, `mxlMonitoringRecordWriteContent` |
+| Application reports | what no libmxl status carries: input late, out of space, invalid input | `mxlMonitoringRecordWriteOutcome`, `mxlMonitoringRecordWriteEssence` |
 | Core model | per-flow counters and histograms, access state, last error, conditions | `monitoring.h` |
 | Snapshots and events | a copy of every flow's counts; started, persisting and recovered events | `mxlMonitoringSnapshot`, `mxlMonitoringPoll` |
 | Exporters | render snapshots and events for a backend | `prometheus.h` |
@@ -66,23 +66,33 @@ previous flow (format, definition, last data, last error) and keeps the counts.
 
 ## Model
 
-| Outcome | Values |
-| --- | --- |
-| Access | starting, open, domain unavailable, flow not found, permission denied, flow invalid, other, disconnected |
-| Read | ok, too early, too late, permission denied, error, invalid content |
-| Write | ok, input late, invalid input, permission denied, out of space, error |
-| Content | wrong format, wrong resolution, wrong rate, wrong size, missing, invalid, incomplete, illegal values |
+| Outcome | Values | IN-004 category |
+| --- | --- | --- |
+| Access | starting, open, domain unavailable, flow not found, permission denied, flow invalid, other, disconnected | Access Status |
+| Read | ok, too early, too late, permission denied, error | Read Status |
+| | invalid essence | Essence Status |
+| Write | ok, permission denied, out of space, error | Write Status |
+| | input late, invalid input | Essence Status |
+| Essence | wrong format, wrong resolution, wrong rate, wrong size, missing, invalid, incomplete, illegal values | Essence Status, the reason for invalid essence or invalid input |
 
-OK reads and writes, invalid content, invalid input, input late and out of
+IN-004 sorts a reader's failures into Access, Read and Essence Status and a
+writer's into Access, Write and Essence Status, and puts "nothing available in
+time to write", incorrect input and grains "available but wrong" under Essence
+Status. The model reports input late, invalid input and invalid essence as
+read or write outcomes all the same: each takes the place of an ok read or
+write, so a sum over the outcomes is the number of reads or writes, and every
+exporter keeps that shape.
+
+OK reads and writes, invalid essence, invalid input, input late and out of
 space count units: grains for discrete flows, samples for continuous ones.
 Every other outcome counts occurrences, since a failed read covers no data.
-Content issues count where read and write outcomes count, so a grain is either
-ok or invalid content, never both, and the content counts say why.
+Essence issues count where read and write outcomes count, so a grain is either
+ok or invalid essence, never both, and the essence counts say why.
 
-Per flow the model also holds skipped units, stalls, opens, losses, the last
-error (status, index, time, text), how the flow's definition differs from its
-expectation, the age of the last data, whether it is delivering, and three
-latency histograms.
+Per flow the model also holds skipped units, stalls, opens, losses of
+access, the last error (status, index, time, text), how the flow's definition
+differs from its expectation, the age of the last data, whether it is
+delivering, and three latency histograms.
 
 ## Counting rules
 
@@ -108,7 +118,7 @@ plus 50 ms for scheduling. A read spans one grain, or 10 ms of samples or the
 writer's sync batch if larger. A stall is four read spans without data, at
 least 100 ms, so a grain committed late is a slow grain rather than a stall.
 
-## Content checks
+## Essence checks
 
 A grain or batch counts at most one issue, the worst, so a grain that is both
 the wrong size and incomplete counts once. Format, resolution and rate are
@@ -148,7 +158,7 @@ offset between nodes.
 ## Conditions and events
 
 A condition is one way a flow is failing: one access failure, one read or
-write outcome, or, for invalid content and invalid input, one content issue,
+write outcome, or, for invalid essence and invalid input, one essence issue,
 so a wrong format and illegal values notify separately. Each condition emits:
 
 | Phase | When |
@@ -174,16 +184,19 @@ to be shorter than the recover delay.
 ### Prometheus
 
 `mxl-monitoring-prometheus` renders the text exposition format from a
-snapshot. The names predate the library: reader flows reproduce exactly what
+snapshot. The reader's names predate the library: reader flows reproduce what
 `mxl-reader` serves, so dashboards and alert rules built on it keep working.
-New roles follow the same scheme under their own prefix:
+The one exception is `access_losses_total`, which `mxl-reader` calls
+`lost_total`: BCP-008-01 calls lost what never arrived, skipped and missing
+grains, and a loss of access is not that. Other roles follow the same scheme
+under their own prefix, with the label values of the OTLP exporter:
 
 | Role | Prefix |
 | --- | --- |
 | reader | `mxl_reader` |
 | writer | `mxl_writer` |
-| replication source | `mxl_gateway_source` |
-| replication target | `mxl_gateway_target` |
+| replication source | `mxl_replication_source` |
+| replication target | `mxl_replication_target` |
 
 | Metric | Type | Roles |
 | --- | --- | --- |
@@ -191,20 +204,35 @@ New roles follow the same scheme under their own prefix:
 | `<prefix>_flow_delivering{flow}` | gauge | all |
 | `<prefix>_reads_total{flow,result}` | counter | reader, source |
 | `<prefix>_writes_total{flow,result}` | counter | writer, target |
+| `<prefix>_invalid_essence_total{flow,issue}` | counter | source |
 | `<prefix>_invalid_input_total{flow,issue}` | counter | writer, target |
 | `<prefix>_open_failures_total{flow,reason}` | counter | all |
 | `<prefix>_skipped_total{flow}`, `<prefix>_stalls_total{flow}` | counter | reader, source |
-| `<prefix>_opens_total{flow}`, `<prefix>_lost_total{flow}` | counter | all |
+| `<prefix>_opens_total{flow}`, `<prefix>_access_losses_total{flow}` | counter | all |
 | `<prefix>_age_seconds{flow}` | gauge | all |
 | `<prefix>_arrival_seconds` | histogram | reader, source |
 | `<prefix>_commit_seconds` | histogram | all |
 | `<prefix>_input_seconds` | histogram | writer, target |
 
-The read `result` label keeps `mxl-reader`'s values: content issues appear as
-their own results (`missing`, `invalid`, `incomplete`, `wrong_size`,
-`illegal_values`, and `wrong_format` covering format, resolution and rate),
-next to `ok`, `too_early`, `too_late`, `permission_error` and `other_error`.
-Open failure reasons are `domain`, `not_found`, `permission` and `other`.
+The reader's `result` label keeps `mxl-reader`'s values: essence issues
+appear as their own results, and errors and open failure reasons under names
+of their own. The OTLP names are canonical; the reader's values map to them
+as follows, and every other role uses the canonical values, with a source's
+essence issues in `invalid_essence_total{issue}` as a writer's are in
+`invalid_input_total{issue}`:
+
+| Label | `mxl_reader` value | Canonical value |
+| --- | --- | --- |
+| `result` | `ok`, `too_early`, `too_late` | the same |
+| `result` | `permission_error` | `permission_denied` |
+| `result` | `other_error` | `read_error` |
+| `result` | `missing`, `invalid`, `incomplete`, `wrong_size`, `illegal_values` | `invalid_essence` with that issue |
+| `result` | `wrong_format` | `invalid_essence` with issue `wrong_format`, `wrong_resolution` or `wrong_rate`, summed |
+| `reason` | `domain` | `domain_unavailable` |
+| `reason` | `not_found` | `flow_not_found` |
+| `reason` | `permission` | `permission_denied` |
+| `reason` | `other` | `flow_invalid` and `other`, summed |
+
 Flow labels are escaped as the exposition format requires, never sanitised: a
 slot named `cam:video` stays `cam:video`.
 
@@ -239,23 +267,24 @@ costs the points of that interval, never a count.
 | --- | --- | --- | --- |
 | `mxl.flow.state` | gauge, `{state}` | `mxl.flow.state`: the access names | reader, writer |
 | `mxl.flow.open.failures` | counter | `mxl.open.failure`: `domain_unavailable`, `flow_not_found`, `permission_denied`, `flow_invalid`, `other` | reader, writer |
-| `mxl.flow.opens`, `mxl.flow.reopens` | counter | | reader, writer |
-| `mxl.reader.reads` | counter | `mxl.read.result`: `ok`, `too_early`, `too_late`, `permission_denied`, `read_error`, `invalid_content` with `mxl.content.issue` | reader |
+| `mxl.flow.opens` | counter, `{open}` | | reader, writer |
+| `mxl.flow.access.losses` | counter, `{loss}` | | reader, writer |
+| `mxl.reader.reads` | counter | `mxl.read.result`: `ok`, `too_early`, `too_late`, `permission_denied`, `read_error`, `invalid_essence` with `mxl.essence.issue` | reader |
 | `mxl.reader.skipped`, `mxl.reader.stalls` | counter | | reader |
 | `mxl.reader.delivering` | gauge, `{flow}` | | reader |
 | `mxl.reader.age` | gauge, `s` | | reader |
 | `mxl.reader.arrival.latency`, `mxl.reader.commit.latency` | histogram, `s` | | reader |
-| `mxl.writer.writes` | counter | `mxl.write.result`: `ok`, `input_late`, `permission_denied`, `out_of_space`, `write_error`, `invalid_input` with `mxl.content.issue` | writer |
+| `mxl.writer.writes` | counter | `mxl.write.result`: `ok`, `input_late`, `permission_denied`, `out_of_space`, `write_error`, `invalid_input` with `mxl.essence.issue` | writer |
 | `mxl.writer.delivering` | gauge, `{flow}` | | writer |
 | `mxl.writer.head` | gauge, `{index}` | | writer |
 | `mxl.writer.commit.latency`, `mxl.writer.input.latency` | histogram, `s` | | writer |
 
 Every point carries `mxl.flow.id`, and once the flow is open
 `mxl.flow.media_type` (`video`, `audio`, `data`, `event`) and `mxl.flow.unit`
-(`grain`, `sample`). Content issues are counted per issue and never as a total
+(`grain`, `sample`). Essence issues are counted per issue and never as a total
 beside them, so a sum over the result is the number of reads or writes.
-Counters have unit `1`: an instrument has one unit, and a flow's unit is its
-attribute. No gauge has unit `1`, which Prometheus would name with a `_ratio`
+Counters of grains, samples or reads have unit `1`: an instrument has one
+unit, and a flow's unit is its attribute. No gauge has unit `1`, which Prometheus would name with a `_ratio`
 suffix. `mxl.status` is not on metric points, since a snapshot keeps only the
 last status of a flow, not one per outcome; events carry it. Replication roles
 are not exported yet.
@@ -265,31 +294,39 @@ Each event is one log record with an event name, `mxl.flow.open_failed`,
 and `mxl.reader.read_recovered`, `mxl.writer.write_failed` and
 `mxl.writer.write_recovered`; severity WARN for `too_early`, `too_late` and
 `input_late`, ERROR for other failures, INFO for a recovery; a one-sentence
-body; and the flow's attributes with the outcome, `mxl.content.issue`,
+body; and the flow's attributes with the outcome, `mxl.essence.issue`,
 `mxl.event.phase`, `mxl.status`, `mxl.grain.index`, `mxl.occurrences`,
 `mxl.total` and `mxl.duration`. Records leave through the SDK's batch
 processor, so delivering an event never waits on the network.
 
 ### NMOS
 
-`bcp008.h`, in the core, decides what an AMWA BCP-008 monitor reports for a
-flow: an `NcReceiverMonitor` for a reader or replication source, an
-`NcSenderMonitor` for a writer or replication target. It reads snapshots and
+`bcp008.h`, in the core, decides what an AMWA monitor reports for a flow: a
+[BCP-008-01](https://specs.amwa.tv/bcp-008-01/latest/) `NcReceiverMonitor` for
+a reader or replication source, a
+[BCP-008-02](https://specs.amwa.tv/bcp-008-02/latest/) `NcSenderMonitor` for a
+writer or replication target. It reads snapshots and
 nothing else, so it carries no NMOS dependency, and a Node that polls another
 process's counts fills snapshots from them and gets the same judgement.
 
 The IS-12 implementation of the Node holds the monitor object and does what
-BCP-008 asks of the object rather than of the judgement: it delays reports by
-`statusReportingDelay`, counts status transitions, derives `overallStatus`,
-and turns a monitor `Inactive` on deactivation. The library hands it domain
-statuses and counters.
+BCP-008-01 and BCP-008-02 ask of the object rather than of the judgement: it
+delays reports by `statusReportingDelay`, counts status transitions, derives
+`overallStatus`, and turns a monitor `Inactive` on deactivation. The library
+hands it domain statuses and counters.
+
+The Node also sets `synchronizationSourceId`, which `bcp008.h` does not
+provide: to `internal`. MXL media timestamps come from the node's own clock,
+so the monitor uses no external synchronization, and both specifications
+require `internal` of a device that does not intend to use it; the
+synchronization status is NotUsed to match.
 
 Statuses are judged on what was counted between two snapshots, the previous
 poll's and the current one. A fault counted before the previous poll has
 been reported once; judging on totals would hold a monitor unhealthy for the
 rest of the process's life. Counts are read as well as states, because a
 failure the flow recovered from within the interval, a failed read, a loss
-and reopen or a stall shorter than a second, has left no state by the time
+of access and reopen or a stall shorter than a second, has left no state by the time
 of the poll. A domain nothing in the interval decides, such as the stream of
 a reader that read nothing, is reported unchanged: no data says nothing
 about whether data decodes.
@@ -297,30 +334,47 @@ about whether data decodes.
 | Domain | Receiver | Sender |
 | --- | --- | --- |
 | link | AllDown while the MXL domain is unavailable, the flow's only link; AllUp otherwise | same |
-| connection or transmission | Unhealthy while not open or not delivering, or for a loss, a stall, a failed read, grains lost (skipped, missing) or late reads (too early past the grace) | Unhealthy while not open or not delivering, or for a loss, a stall or a failed commit |
-| synchronization | NotUsed: media timestamps come from the node's own clock | same |
+| connection or transmission | Unhealthy while not open or not delivering, or for a loss of access, a stall, a failed read, grains lost (skipped, missing) or late reads (too early past the grace) | Unhealthy while not open or not delivering, or for a loss of access, a stall or a failed commit |
+| synchronization | NotUsed, with `synchronizationSourceId` `internal`: media timestamps come from the node's own clock | same |
 | stream or essence | Unhealthy for wrong format, wrong size or invalid; PartiallyHealthy for wrong resolution, wrong rate, incomplete or illegal values | Unhealthy for invalid input or no input in time at all, PartiallyHealthy for some input late |
 
-A disconnected flow is Inactive in connection and stream. BCP-008 calls a
+A disconnected flow is Inactive in connection and stream. BCP-008-01 calls a
 stream Unhealthy when it cannot be decoded and PartiallyHealthy when it
-decodes but differs from what was expected; that line separates the content
+decodes but differs from what was expected; that line separates the essence
 issues. A missing grain was never written, so it counts against the
 connection as lost, not against the stream, and reading only missing grains
 leaves the stream unchanged. On a sender, a grain written without input in
 time carries no essence: with none in time at all the sender has no essence,
-which BCP-008 calls Unhealthy; with some, the essence is there with gaps.
+which BCP-008-02 calls Unhealthy; with some, the essence is there with gaps.
 
-BCP-008 calls lost what never arrived and late what arrived too late to be
+BCP-008-01 calls lost what never arrived and late what arrived too late to be
 used. To a reader, a grain the ring overtook it on never arrived, whatever
 the writer did, so skipped counts as lost, as does missing; a read that found
 its grain not there a grace period past its media timestamp is late, and it
-counts in reads, since the core counts too early once per read index.
+counts in reads, since the core counts too early once per read index. In this
+library "lost" means only that; a flow going away under an open reader or
+writer is a loss of access (`accessLosses`, `access_losses_total`,
+`mxl.flow.access.losses`).
+
+| BCP counter | Kind | Counters, by name | Unit |
+| --- | --- | --- | --- |
+| BCP-008-01 `GetLostPacketCounters` | `MXL_MONITORING_BCP008_LOST` | `skipped`, `missing` | grains or samples |
+| BCP-008-01 `GetLatePacketCounters` | `MXL_MONITORING_BCP008_LATE` | `too_early`: too-early reads past the grace period | reads |
+| BCP-008-02 `GetTransmissionErrorCounters` | `MXL_MONITORING_BCP008_TRANSMISSION_ERROR` | failed commits by outcome: `permission_denied`, `out_of_space`, `write_error` | failed commits; failed attempts to write for `out_of_space` |
+
+A `too_late` read counts in neither a counter nor a status of its own. It is
+not a failed read, so it does not make the connection Unhealthy and appears
+in no status message; the grains the reader then jumps over to reach the head
+again, recorded with `mxlMonitoringRecordSkipped`, count as lost, in the
+connection status (`<n> grains lost`) and in the lost counters. A reader that
+reads nothing but `too_late` stops delivering and turns the connection
+Unhealthy through that.
 
 Counters come from a baseline snapshot, the one a Node keeps at the monitor's
-last reset: lost and late as above, and transmission errors as the failed
-commits by outcome. Input late and invalid input belong to the essence, not
-the transmission. A kind the flow's side does not have is empty, which is how
-BCP-008 answers a device without that capability.
+last reset, as in the table. Input late and invalid input belong to the
+essence, not the transmission. A kind the flow's side does not have is empty,
+which is how BCP-008-01 and BCP-008-02 answer a device without that
+capability.
 
 Counts never go down within a process. A Node that polls another process's
 counts sees them go down when that process starts again, and then takes
@@ -340,8 +394,8 @@ section, and every exporter publishes that judgement.
 
 ### Judgement
 
-A flow's health is the worst of its domain statuses, as BCP-008 derives
-`overallStatus`: Inactive while the flow is disconnected, Healthy only while
+A flow's health is the worst of its domain statuses, as BCP-008-01 and
+BCP-008-02 derive `overallStatus`: Inactive while the flow is disconnected, Healthy only while
 every domain is Healthy or NotUsed, and a link AllDown counts as Unhealthy.
 The domain statuses are those of `mxlMonitoringBcp008GetStatuses`; the core
 calls the same code, so a Node and an exporter never disagree on a rule.
@@ -366,8 +420,8 @@ flaps. Limits make some of that tolerable:
 | `inputLate` | sender essence: input late | share of the writes in the window |
 
 A count at or below its limit judges as if it were zero; above it, as the
-rules say. Losses, stalls, failed reads and commits, out of space and every
-content issue keep no limit: each is a fault, however rare. A share rather
+rules say. Losses of access, stalls, failed reads and commits, out of space
+and every essence issue keep no limit: each is a fault, however rare. A share rather
 than a count per window keeps a limit independent of the rate and the window.
 
 Every limit is 0 by default, which is the NMOS judgement as it is. The limits
@@ -393,10 +447,10 @@ counts stay as they are, so `ok` keeps meaning a grain written from input.
 
 ### Reporting delay
 
-BCP-008 reports a change to a less healthy status at once, and a change to a
+BCP-008-01 and BCP-008-02 report a change to a less healthy status at once, and a change to a
 healthier one only once it has held for `statusReportingDelay`, 3 s by
 default. The core applies the same rule to the health it exports, with
-`healthDelayNs` in the configuration, 0 meaning 3 s, so a dashboard sees what
+`statusReportingDelayNs` in the configuration, 0 meaning 3 s, so a dashboard sees what
 a controller sees. `mxlMonitoringBcp008GetStatuses` stays undelayed: the
 Node holds the monitor object and applies the delay itself, and a second
 delay would double it.
@@ -420,3 +474,4 @@ Status names: `inactive`, `healthy`, `partially_healthy`, `unhealthy`.
 | No observer hook for reads, writes and opens | coverage needs the wrappers or explicit record calls |
 | One `lastReadTime` per flow, not per reader | each reader reports its own reads |
 | No per-grain commit time | commit latency on a reader is measured only while the grain read is the head |
+| No latency or jitter measurement, which IN-004 asks of media functions | latency is measured here against media timestamps; jitter is not measured, and IN-004 has no common method of calculating it yet |

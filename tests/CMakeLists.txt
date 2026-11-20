@@ -9,7 +9,7 @@ target_sources(mxl-monitoring-tests
             test_bcp008.cpp
             test_classify.cpp
             test_concurrency.cpp
-            test_content.cpp
+            test_essence.cpp
             test_events.cpp
             test_http.cpp
             test_prometheus.cpp

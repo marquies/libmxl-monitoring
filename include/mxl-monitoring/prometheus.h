@@ -2,10 +2,11 @@
 // /metrics endpoint.
 //
 // Readers carry the metric names and label values mxl-reader has served, so
-// dashboards and alerts built on them keep working. Replication sources carry
-// the same families under their own prefix, and writers and replication
-// targets follow the same scheme. The prefix names the role: mxl_reader,
-// mxl_writer, mxl_gateway_source, mxl_gateway_target.
+// dashboards and alerts built on them keep working, except for
+// access_losses_total, which mxl-reader called lost_total. Writers and
+// replication sources and targets follow the same scheme with the label
+// values the OTLP exporter uses. The prefix names the role: mxl_reader,
+// mxl_writer, mxl_replication_source, mxl_replication_target.
 //
 // Where the values differ from mxl-reader's: an open that fails because the
 // flow's data was replaced is in state flow_not_found rather than flow_error,

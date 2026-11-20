@@ -1,14 +1,15 @@
 @startuml
 title Data model - what external services receive
 skinparam classAttributeIconSize 0
+set separator none
 hide empty methods
 
 package "Core model (monitoring.h)" {
   class mxlMonitoringFlowSnapshot <<per flow>> {
     flowId, target, role
     unit, format, rate, mediaType
-    access, accessFailures[], opens, losses
-    reads[], writes[], content[]
+    access, accessFailures[], opens, accessLosses
+    reads[], writes[], essence[]
     skipped, stalls
     lastErrorStatus / Index / Time / Detail
     formatMismatch
@@ -17,7 +18,7 @@ package "Core model (monitoring.h)" {
   }
   class mxlMonitoringEvent <<per condition change>> {
     timeNs, flowId, role
-    kind, phase, outcome, content
+    kind, phase, outcome, essence
     status, index
     occurrences, total, durationNs
     detail, format, unit
@@ -27,7 +28,7 @@ package "Core model (monitoring.h)" {
 package "Prometheus (pull, text)" {
   class "Metric families\n<prefix>_*" as Prom {
     prefix per role: mxl_reader,
-    mxl_writer, mxl_gateway_*
+    mxl_writer, mxl_replication_*
     labels: flow + state / result /
     issue / reason / le
   }
@@ -38,7 +39,7 @@ package "OTel Collector (push, OTLP/HTTP)" {
     cumulative, every export interval
     attrs: mxl.flow.id, media_type, unit
     + mxl.read.result / mxl.write.result /
-    mxl.open.failure / mxl.content.issue
+    mxl.open.failure / mxl.essence.issue
   }
   class "Log records\nmxl.*.{failed, failing, recovered, opened}" as OtlpL {
     severity: WARN / ERROR / INFO
@@ -49,6 +50,25 @@ package "OTel Collector (push, OTLP/HTTP)" {
   }
 }
 
+package "NMOS IS-12 Node (BCP-008-01 / -02 monitors)" {
+  class "Domain statuses\nmxlMonitoringBcp008Statuses" as NmosS {
+    link, connection | transmission,
+    synchronization: NotUsed,
+    stream | essence
+    each: status + message
+    from previous + current snapshot
+  }
+  class "Counters\nmxlMonitoringBcp008Counter[]" as NmosC {
+    lost: skipped, missing
+    late: too_early
+    transmission errors: permission_denied,
+    out_of_space, write_error
+    from baseline + current snapshot
+  }
+}
+
+mxlMonitoringFlowSnapshot --> NmosS : mxlMonitoringBcp008GetStatuses
+mxlMonitoringFlowSnapshot --> NmosC : mxlMonitoringBcp008GetCounters
 mxlMonitoringFlowSnapshot --> Prom : mxlMonitoringPrometheusRender
 mxlMonitoringFlowSnapshot --> OtlpM : built on the exporter's\nthread from snapshots
 mxlMonitoringEvent --> OtlpL : one record per event,\nvia the batch processor

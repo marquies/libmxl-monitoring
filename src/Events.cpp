@@ -14,16 +14,16 @@ namespace mxl::monitoring
             std::uint64_t now;
 
             // The text of this condition only: timing conditions have none.
-            std::string detail(mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content) const
+            std::string detail(mxlMonitoringConditionKind kind, int outcome, mxlMonitoringEssence essence) const
             {
                 auto const lock = std::lock_guard{flow.mutex};
                 if (kind == MXL_MONITORING_CONDITION_ACCESS)
                 {
                     return flow.accessDetail[outcome];
                 }
-                if (content != MXL_MONITORING_CONTENT_COUNT)
+                if (essence != MXL_MONITORING_ESSENCE_COUNT)
                 {
-                    return flow.contentDetail[content];
+                    return flow.essenceDetail[essence];
                 }
                 auto const timing = kind == MXL_MONITORING_CONDITION_READ
                                       ? (outcome == MXL_MONITORING_READ_TOO_EARLY || outcome == MXL_MONITORING_READ_TOO_LATE)
@@ -31,7 +31,7 @@ namespace mxl::monitoring
                 return timing ? std::string{} : flow.failureDetail;
             }
 
-            void emit(Condition const& c, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content, mxlMonitoringPhase phase,
+            void emit(Condition const& c, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringEssence essence, mxlMonitoringPhase phase,
                 mxlStatus status, std::uint64_t index, std::uint64_t occurrences)
             {
                 auto event = mxlMonitoringEvent{};
@@ -48,13 +48,13 @@ namespace mxl::monitoring
                     case MXL_MONITORING_CONDITION_READ:   event.read = static_cast<mxlMonitoringRead>(outcome); break;
                     case MXL_MONITORING_CONDITION_WRITE:  event.write = static_cast<mxlMonitoringWrite>(outcome); break;
                 }
-                event.content = content;
+                event.essence = essence;
                 event.status = status;
                 event.index = index;
                 event.occurrences = occurrences;
                 event.total = c.total;
                 event.durationNs = since(now, c.startedAt);
-                copyText(detail(kind, outcome, content), event.detail, sizeof(event.detail));
+                copyText(detail(kind, outcome, essence), event.detail, sizeof(event.detail));
                 event.format = static_cast<mxlDataFormat>(flow.format.load(Relaxed));
                 event.unit = static_cast<mxlMonitoringUnit>(flow.unit.load(Relaxed));
                 for (auto const& s : monitoring.subscribers)
@@ -67,7 +67,7 @@ namespace mxl::monitoring
             // flow's count of good units; recovered says whether the flow is
             // back without regard to time, for access conditions.
             void step(Condition& c, std::uint64_t count, std::uint64_t ok, bool accessCondition, mxlMonitoringConditionKind kind, int outcome,
-                mxlMonitoringContent content, mxlStatus status, std::uint64_t index)
+                mxlMonitoringEssence essence, mxlStatus status, std::uint64_t index)
             {
                 auto const delta = count - c.seen; // counters only grow
                 c.seen = count;
@@ -83,7 +83,7 @@ namespace mxl::monitoring
                         c.lastEventAt = now;
                         c.total = delta;
                         c.pending = 0;
-                        emit(c, kind, outcome, content, MXL_MONITORING_PHASE_STARTED, status, index, delta);
+                        emit(c, kind, outcome, essence, MXL_MONITORING_PHASE_STARTED, status, index, delta);
                         return;
                     }
                     c.pending += delta;
@@ -103,7 +103,7 @@ namespace mxl::monitoring
                                                              ok > c.okAtLastOccurrence && delivering;
                 if (recovered)
                 {
-                    emit(c, kind, outcome, content, MXL_MONITORING_PHASE_RECOVERED, status, index, c.pending);
+                    emit(c, kind, outcome, essence, MXL_MONITORING_PHASE_RECOVERED, status, index, c.pending);
                     c.active = false;
                     c.pending = 0;
                     return;
@@ -114,7 +114,7 @@ namespace mxl::monitoring
                 auto const persists = c.pending > 0 || (!accessCondition && !delivering && access != MXL_MONITORING_ACCESS_DISCONNECTED);
                 if (persists && since(now, c.lastEventAt) >= monitoring.persistIntervalNs)
                 {
-                    emit(c, kind, outcome, content, MXL_MONITORING_PHASE_PERSISTING, status, index, c.pending);
+                    emit(c, kind, outcome, essence, MXL_MONITORING_PHASE_PERSISTING, status, index, c.pending);
                     c.lastEventAt = now;
                     c.pending = 0;
                 }
@@ -125,13 +125,13 @@ namespace mxl::monitoring
                 for (int a = MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE; a < MXL_MONITORING_ACCESS_COUNT; ++a)
                 {
                     step(flow.accessConditions[a], flow.accessOccurrences[a].load(std::memory_order_acquire), 0, true, MXL_MONITORING_CONDITION_ACCESS, a,
-                        MXL_MONITORING_CONTENT_COUNT, static_cast<mxlStatus>(flow.accessStatus[a].load(Relaxed)), 0);
+                        MXL_MONITORING_ESSENCE_COUNT, static_cast<mxlStatus>(flow.accessStatus[a].load(Relaxed)), 0);
                 }
 
                 auto const readSide = flow.role == MXL_MONITORING_ROLE_READER || flow.role == MXL_MONITORING_ROLE_REPLICATION_SOURCE;
                 auto const kind = readSide ? MXL_MONITORING_CONDITION_READ : MXL_MONITORING_CONDITION_WRITE;
                 auto const ok = readSide ? flow.reads[MXL_MONITORING_READ_OK].load(Relaxed) : flow.writes[MXL_MONITORING_WRITE_OK].load(Relaxed);
-                auto const invalid = readSide ? static_cast<int>(MXL_MONITORING_READ_INVALID_CONTENT) : static_cast<int>(MXL_MONITORING_WRITE_INVALID_INPUT);
+                auto const invalid = readSide ? static_cast<int>(MXL_MONITORING_READ_INVALID_ESSENCE) : static_cast<int>(MXL_MONITORING_WRITE_INVALID_INPUT);
 
                 if (readSide)
                 {
@@ -139,7 +139,7 @@ namespace mxl::monitoring
                     {
                         if (r != invalid)
                         {
-                            step(flow.readConditions[r], flow.reads[r].load(std::memory_order_acquire), ok, false, kind, r, MXL_MONITORING_CONTENT_COUNT,
+                            step(flow.readConditions[r], flow.reads[r].load(std::memory_order_acquire), ok, false, kind, r, MXL_MONITORING_ESSENCE_COUNT,
                                 static_cast<mxlStatus>(flow.readStatus[r].load(Relaxed)), flow.readIndex[r].load(Relaxed));
                         }
                     }
@@ -150,15 +150,15 @@ namespace mxl::monitoring
                     {
                         if (w != invalid)
                         {
-                            step(flow.writeConditions[w], flow.writes[w].load(std::memory_order_acquire), ok, false, kind, w, MXL_MONITORING_CONTENT_COUNT,
+                            step(flow.writeConditions[w], flow.writes[w].load(std::memory_order_acquire), ok, false, kind, w, MXL_MONITORING_ESSENCE_COUNT,
                                 static_cast<mxlStatus>(flow.writeStatus[w].load(Relaxed)), flow.writeIndex[w].load(Relaxed));
                         }
                     }
                 }
-                for (int c = 0; c < MXL_MONITORING_CONTENT_COUNT; ++c)
+                for (int c = 0; c < MXL_MONITORING_ESSENCE_COUNT; ++c)
                 {
-                    step(flow.contentConditions[c], flow.content[c].load(std::memory_order_acquire), ok, false, kind, invalid, static_cast<mxlMonitoringContent>(c),
-                        MXL_STATUS_OK, flow.contentIndex[c].load(Relaxed));
+                    step(flow.essenceConditions[c], flow.essence[c].load(std::memory_order_acquire), ok, false, kind, invalid, static_cast<mxlMonitoringEssence>(c),
+                        MXL_STATUS_OK, flow.essenceIndex[c].load(Relaxed));
                 }
             }
         };

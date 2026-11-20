@@ -116,14 +116,14 @@ namespace mxl::monitoring
     }
 
     // Once per open: a caller retrying the read before reopening has still
-    // lost the flow once.
+    // lost access to the flow once.
     void Flow::lose(mxlMonitoringAccess into, mxlStatus status) noexcept
     {
         accessStatus[into].store(status, Relaxed);
         error(status, 0, now());
         if (access.exchange(into, Relaxed) == MXL_MONITORING_ACCESS_OPEN)
         {
-            add(losses, 1);
+            add(accessLosses, 1);
             occur(accessOccurrences[into], 1);
         }
     }
@@ -148,11 +148,11 @@ namespace mxl::monitoring
         failureDetail = std::move(detail);
     }
 
-    void Flow::describeContent(mxlMonitoringContent issue, std::string detail)
+    void Flow::describeEssence(mxlMonitoringEssence issue, std::string detail)
     {
         auto const lock = std::lock_guard{mutex};
         lastErrorDetail = detail;
-        contentDetail[issue] = std::move(detail);
+        essenceDetail[issue] = std::move(detail);
     }
 
     void Flow::forget()
@@ -164,7 +164,7 @@ namespace mxl::monitoring
         {
             d.clear();
         }
-        for (auto& d : contentDetail)
+        for (auto& d : essenceDetail)
         {
             d.clear();
         }
@@ -476,19 +476,19 @@ extern "C"
         return "unknown";
     }
 
-    char const* mxlMonitoringContentName(mxlMonitoringContent content)
+    char const* mxlMonitoringEssenceName(mxlMonitoringEssence essence)
     {
-        switch (content)
+        switch (essence)
         {
-            case MXL_MONITORING_CONTENT_WRONG_FORMAT:     return "wrong_format";
-            case MXL_MONITORING_CONTENT_WRONG_RESOLUTION: return "wrong_resolution";
-            case MXL_MONITORING_CONTENT_WRONG_RATE:       return "wrong_rate";
-            case MXL_MONITORING_CONTENT_WRONG_SIZE:       return "wrong_size";
-            case MXL_MONITORING_CONTENT_MISSING:          return "missing";
-            case MXL_MONITORING_CONTENT_INVALID:          return "invalid";
-            case MXL_MONITORING_CONTENT_INCOMPLETE:       return "incomplete";
-            case MXL_MONITORING_CONTENT_ILLEGAL_VALUES:   return "illegal_values";
-            case MXL_MONITORING_CONTENT_COUNT:            break;
+            case MXL_MONITORING_ESSENCE_WRONG_FORMAT:     return "wrong_format";
+            case MXL_MONITORING_ESSENCE_WRONG_RESOLUTION: return "wrong_resolution";
+            case MXL_MONITORING_ESSENCE_WRONG_RATE:       return "wrong_rate";
+            case MXL_MONITORING_ESSENCE_WRONG_SIZE:       return "wrong_size";
+            case MXL_MONITORING_ESSENCE_MISSING:          return "missing";
+            case MXL_MONITORING_ESSENCE_INVALID:          return "invalid";
+            case MXL_MONITORING_ESSENCE_INCOMPLETE:       return "incomplete";
+            case MXL_MONITORING_ESSENCE_ILLEGAL_VALUES:   return "illegal_values";
+            case MXL_MONITORING_ESSENCE_COUNT:            break;
         }
         return nullptr;
     }
@@ -502,7 +502,7 @@ extern "C"
             case MXL_MONITORING_READ_TOO_LATE:          return "too_late";
             case MXL_MONITORING_READ_PERMISSION_DENIED: return "permission_denied";
             case MXL_MONITORING_READ_ERROR:             return "read_error";
-            case MXL_MONITORING_READ_INVALID_CONTENT:   return "invalid_content";
+            case MXL_MONITORING_READ_INVALID_ESSENCE:   return "invalid_essence";
             case MXL_MONITORING_READ_COUNT:             break;
         }
         return "unknown";
@@ -523,7 +523,7 @@ extern "C"
         return "unknown";
     }
 
-    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringContent content,
+    mxlStatus mxlMonitoringDescribe(mxlMonitoringFlow flow, mxlMonitoringConditionKind kind, int outcome, mxlMonitoringEssence essence,
         char const* detail)
     {
         auto* const f = toFlow(flow);
@@ -545,15 +545,15 @@ extern "C"
                 case MXL_MONITORING_CONDITION_READ:
                 case MXL_MONITORING_CONDITION_WRITE:
                 {
-                    auto const invalid = kind == MXL_MONITORING_CONDITION_READ ? outcome == MXL_MONITORING_READ_INVALID_CONTENT
+                    auto const invalid = kind == MXL_MONITORING_CONDITION_READ ? outcome == MXL_MONITORING_READ_INVALID_ESSENCE
                                                                                : outcome == MXL_MONITORING_WRITE_INVALID_INPUT;
                     if (invalid)
                     {
-                        if (!inRange(static_cast<int>(content), MXL_MONITORING_CONTENT_COUNT))
+                        if (!inRange(static_cast<int>(essence), MXL_MONITORING_ESSENCE_COUNT))
                         {
                             return MXL_ERR_INVALID_ARG;
                         }
-                        f->describeContent(content, detail);
+                        f->describeEssence(essence, detail);
                     }
                     else
                     {
@@ -673,19 +673,19 @@ extern "C"
         occur(f->reads[read], 1);
     }
 
-    void mxlMonitoringRecordReadContent(mxlMonitoringFlow flow, mxlMonitoringContent issue, uint64_t index, uint64_t count)
+    void mxlMonitoringRecordReadEssence(mxlMonitoringFlow flow, mxlMonitoringEssence issue, uint64_t index, uint64_t count)
     {
         auto* const f = toFlow(flow);
-        if (f == nullptr || !inRange(static_cast<int>(issue), MXL_MONITORING_CONTENT_COUNT))
+        if (f == nullptr || !inRange(static_cast<int>(issue), MXL_MONITORING_ESSENCE_COUNT))
         {
             return;
         }
         auto const now = f->now();
-        f->contentIndex[issue].store(index, Relaxed);
+        f->essenceIndex[issue].store(index, Relaxed);
         f->error(MXL_STATUS_OK, index, now);
         f->data(index, now);
-        add(f->reads[MXL_MONITORING_READ_INVALID_CONTENT], count);
-        occur(f->content[issue], count);
+        add(f->reads[MXL_MONITORING_READ_INVALID_ESSENCE], count);
+        occur(f->essence[issue], count);
     }
 
     void mxlMonitoringRecordSkipped(mxlMonitoringFlow flow, uint64_t count)
@@ -746,17 +746,17 @@ extern "C"
         occur(f->writes[outcome], count);
     }
 
-    void mxlMonitoringRecordWriteContent(mxlMonitoringFlow flow, mxlMonitoringContent issue, uint64_t index, uint64_t count)
+    void mxlMonitoringRecordWriteEssence(mxlMonitoringFlow flow, mxlMonitoringEssence issue, uint64_t index, uint64_t count)
     {
         auto* const f = toFlow(flow);
-        if (f == nullptr || !inRange(static_cast<int>(issue), MXL_MONITORING_CONTENT_COUNT))
+        if (f == nullptr || !inRange(static_cast<int>(issue), MXL_MONITORING_ESSENCE_COUNT))
         {
             return;
         }
-        f->contentIndex[issue].store(index, Relaxed);
+        f->essenceIndex[issue].store(index, Relaxed);
         f->error(MXL_STATUS_OK, index, f->now());
         add(f->writes[MXL_MONITORING_WRITE_INVALID_INPUT], count);
-        occur(f->content[issue], count);
+        occur(f->essence[issue], count);
     }
 
     void mxlMonitoringRecordInput(mxlMonitoringFlow flow, uint64_t index, uint64_t arrivalNs)
@@ -806,7 +806,7 @@ extern "C"
                 s.accessFailures[a] = f.accessFailures[a].load(Relaxed);
             }
             s.opens = f.opens.load(Relaxed);
-            s.losses = f.losses.load(Relaxed);
+            s.accessLosses = f.accessLosses.load(Relaxed);
             for (std::size_t r = 0; r < f.reads.size(); ++r)
             {
                 s.reads[r] = f.reads[r].load(Relaxed);
@@ -815,9 +815,9 @@ extern "C"
             {
                 s.writes[w] = f.writes[w].load(Relaxed);
             }
-            for (std::size_t c = 0; c < f.content.size(); ++c)
+            for (std::size_t c = 0; c < f.essence.size(); ++c)
             {
-                s.content[c] = f.content[c].load(Relaxed);
+                s.essence[c] = f.essence[c].load(Relaxed);
             }
             s.skipped = f.skipped.load(Relaxed);
             s.stalls = f.stalls.load(Relaxed);

@@ -2,7 +2,7 @@
 // arguments of the libmxl function it is named after, plus the flow it
 // records on, calls it, records the result on the flow and returns the libmxl
 // status unchanged. A grain or a batch of samples read successfully passes
-// the content checks of content.h before it counts as OK.
+// the essence checks of essence.h before it counts as OK.
 
 #pragma once
 
@@ -18,7 +18,7 @@ extern "C"
 #endif
 
     // mxlCreateInstance. A NULL result counts as DOMAIN_UNAVAILABLE. The
-    // domain is kept on the flow, for telling a lost domain and a permission
+    // domain is kept on the flow, for telling a domain gone away and a permission
     // failure apart.
     mxlInstance mxlMonitoringCreateInstance(mxlMonitoringFlow flow, char const* domain, char const* options);
 

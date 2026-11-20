@@ -82,19 +82,19 @@ func TestAccessFollowsOpensAndLosses(t *testing.T) {
 	if s.AccessFailures[AccessFlowNotFound] != 1 {
 		t.Errorf("access failures %v, want one flow_not_found", s.AccessFailures)
 	}
-	if s.Losses != 1 || s.Reads[ReadError] != 0 {
-		t.Errorf("losses %d read errors %d, want the invalid flow counted as one loss", s.Losses, s.Reads[ReadError])
+	if s.AccessLosses != 1 || s.Reads[ReadError] != 0 {
+		t.Errorf("access losses %d read errors %d, want the invalid flow counted as one loss of access", s.AccessLosses, s.Reads[ReadError])
 	}
 }
 
-func TestContentIsCountedInsteadOfOK(t *testing.T) {
+func TestEssenceIsCountedInsteadOfOK(t *testing.T) {
 	m, f := newReader(t)
 	f.RecordAccess(nil)
-	f.RecordReadContent(ContentInvalid, 30, 1)
+	f.RecordReadEssence(EssenceInvalid, 30, 1)
 
 	s := snapshot(t, m)
-	if s.Reads[ReadOK] != 0 || s.Reads[ReadInvalidContent] != 1 || s.Content[ContentInvalid] != 1 {
-		t.Errorf("reads %v content %v, want the grain counted as invalid, not ok", s.Reads, s.Content)
+	if s.Reads[ReadOK] != 0 || s.Reads[ReadInvalidEssence] != 1 || s.Essence[EssenceInvalid] != 1 {
+		t.Errorf("reads %v essence %v, want the grain counted as invalid, not ok", s.Reads, s.Essence)
 	}
 }
 
@@ -117,8 +117,6 @@ func TestSetFormatAndTarget(t *testing.T) {
 	}
 }
 
-// The Prometheus text keeps mxl-reader's metric names and label values, which
-// dashboards and alerts are built on.
 func TestCommitLatencyIsObserved(t *testing.T) {
 	m, f := newReader(t)
 	rate := mxl.Rational{Num: 50, Den: 1}
@@ -138,6 +136,8 @@ func TestCommitLatencyIsObserved(t *testing.T) {
 	}
 }
 
+// The Prometheus text of a reader keeps mxl-reader's metric names and label
+// values, which dashboards and alerts are built on.
 func TestPrometheusTextCarriesTheReaderNames(t *testing.T) {
 	m, f := newReader(t)
 	f.RecordAccess(nil)
@@ -171,7 +171,7 @@ func TestPollAndRemoveFlow(t *testing.T) {
 	}
 }
 
-// An open failing because the flow's data was replaced is not a loss, as
+// An open failing because the flow's data was replaced is not a loss of access, as
 // in the C reader wrappers, and an instance that cannot be created is an
 // unavailable domain although go-mxl carries no status for it.
 func TestOpenFailuresAreClassifiedAsTheWrappersDo(t *testing.T) {

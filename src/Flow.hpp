@@ -8,7 +8,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
-#include "mxl-monitoring/content.h"
+#include "mxl-monitoring/essence.h"
 #include "mxl-monitoring/monitoring.h"
 
 namespace mxl::monitoring
@@ -63,15 +63,15 @@ namespace mxl::monitoring
         std::atomic<bool> timingSet{false};
 
         std::array<Counter, MXL_MONITORING_ACCESS_COUNT> accessFailures{};
-        // Failures plus losses into each state: what access conditions follow.
+        // Failures plus losses of access into each state: what access conditions follow.
         std::array<Counter, MXL_MONITORING_ACCESS_COUNT> accessOccurrences{};
         std::array<std::atomic<int>, MXL_MONITORING_ACCESS_COUNT> accessStatus{};
         Counter opens{0};
-        Counter losses{0};
+        Counter accessLosses{0};
 
         std::array<Counter, MXL_MONITORING_READ_COUNT> reads{};
         std::array<Counter, MXL_MONITORING_WRITE_COUNT> writes{};
-        std::array<Counter, MXL_MONITORING_CONTENT_COUNT> content{};
+        std::array<Counter, MXL_MONITORING_ESSENCE_COUNT> essence{};
         Counter skipped{0};
         Counter stalls{0};
 
@@ -80,7 +80,7 @@ namespace mxl::monitoring
         std::array<std::atomic<int>, MXL_MONITORING_READ_COUNT> readStatus{};
         std::array<Counter, MXL_MONITORING_WRITE_COUNT> writeIndex{};
         std::array<std::atomic<int>, MXL_MONITORING_WRITE_COUNT> writeStatus{};
-        std::array<Counter, MXL_MONITORING_CONTENT_COUNT> contentIndex{};
+        std::array<Counter, MXL_MONITORING_ESSENCE_COUNT> essenceIndex{};
 
         std::atomic<int> lastErrorStatus{MXL_STATUS_OK};
         Counter lastErrorIndex{0};
@@ -115,7 +115,7 @@ namespace mxl::monitoring
         // text of another failure.
         std::array<std::string, MXL_MONITORING_ACCESS_COUNT> accessDetail;
         std::string failureDetail; // read or write errors
-        std::array<std::string, MXL_MONITORING_CONTENT_COUNT> contentDetail;
+        std::array<std::string, MXL_MONITORING_ESSENCE_COUNT> essenceDetail;
         std::string formatMismatch;
         mxlMonitoringDeclared declared{};
         bool definitionSet = false;
@@ -130,7 +130,7 @@ namespace mxl::monitoring
         std::array<Condition, MXL_MONITORING_ACCESS_COUNT> accessConditions{};
         std::array<Condition, MXL_MONITORING_READ_COUNT> readConditions{};
         std::array<Condition, MXL_MONITORING_WRITE_COUNT> writeConditions{};
-        std::array<Condition, MXL_MONITORING_CONTENT_COUNT> contentConditions{};
+        std::array<Condition, MXL_MONITORING_ESSENCE_COUNT> essenceConditions{};
 
         mxlRational rate() const noexcept;
         std::uint64_t now() const noexcept;
@@ -146,7 +146,7 @@ namespace mxl::monitoring
         bool delivering(std::uint64_t at) const noexcept;
         void describeAccess(mxlMonitoringAccess access, std::string detail);
         void describeFailure(std::string detail);
-        void describeContent(mxlMonitoringContent issue, std::string detail);
+        void describeEssence(mxlMonitoringEssence issue, std::string detail);
         // Forgets what was known of the flow before a retarget. Called with
         // mutex held.
         void forget();

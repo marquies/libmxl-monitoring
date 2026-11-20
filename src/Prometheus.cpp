@@ -44,8 +44,8 @@ namespace
         {
             case MXL_MONITORING_ROLE_READER:             return "mxl_reader";
             case MXL_MONITORING_ROLE_WRITER:             return "mxl_writer";
-            case MXL_MONITORING_ROLE_REPLICATION_SOURCE: return "mxl_gateway_source";
-            case MXL_MONITORING_ROLE_REPLICATION_TARGET: return "mxl_gateway_target";
+            case MXL_MONITORING_ROLE_REPLICATION_SOURCE: return "mxl_replication_source";
+            case MXL_MONITORING_ROLE_REPLICATION_TARGET: return "mxl_replication_target";
         }
         return "mxl_unknown";
     }
@@ -63,52 +63,71 @@ namespace
 
     std::uint64_t wrongFormat(mxlMonitoringFlowSnapshot const& s)
     {
-        return s.content[MXL_MONITORING_CONTENT_WRONG_FORMAT] + s.content[MXL_MONITORING_CONTENT_WRONG_RESOLUTION] +
-               s.content[MXL_MONITORING_CONTENT_WRONG_RATE];
+        return s.essence[MXL_MONITORING_ESSENCE_WRONG_FORMAT] + s.essence[MXL_MONITORING_ESSENCE_WRONG_RESOLUTION] +
+               s.essence[MXL_MONITORING_ESSENCE_WRONG_RATE];
     }
 
-    // mxl-reader's read results; wrong_format covers every way the flow
-    // differs from its expectation.
-    constexpr Key ReadResults[] = {
+    // mxl-reader's read results, kept for the dashboards and alert rules
+    // built on them; wrong_format covers every way the flow differs from its
+    // expectation.
+    constexpr Key ReaderResults[] = {
         {"ok",               [](auto const& s) { return s.reads[MXL_MONITORING_READ_OK]; }                  },
         {"too_early",        [](auto const& s) { return s.reads[MXL_MONITORING_READ_TOO_EARLY]; }           },
         {"too_late",         [](auto const& s) { return s.reads[MXL_MONITORING_READ_TOO_LATE]; }            },
-        {"missing",          [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_MISSING]; }        },
-        {"invalid",          [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_INVALID]; }        },
-        {"incomplete",       [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_INCOMPLETE]; }     },
-        {"wrong_size",       [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_WRONG_SIZE]; }     },
+        {"missing",          [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_MISSING]; }        },
+        {"invalid",          [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_INVALID]; }        },
+        {"incomplete",       [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_INCOMPLETE]; }     },
+        {"wrong_size",       [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_WRONG_SIZE]; }     },
         {"wrong_format",     wrongFormat                                                                    },
-        {"illegal_values",   [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_ILLEGAL_VALUES]; } },
+        {"illegal_values",   [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_ILLEGAL_VALUES]; } },
         {"permission_error", [](auto const& s) { return s.reads[MXL_MONITORING_READ_PERMISSION_DENIED]; }   },
         {"other_error",      [](auto const& s) { return s.reads[MXL_MONITORING_READ_ERROR]; }               },
     };
 
+    // Every role but the reader has no names to keep and uses the OTLP ones.
+    constexpr Key ReadResults[] = {
+        {"ok",                [](auto const& s) { return s.reads[MXL_MONITORING_READ_OK]; }                },
+        {"too_early",         [](auto const& s) { return s.reads[MXL_MONITORING_READ_TOO_EARLY]; }         },
+        {"too_late",          [](auto const& s) { return s.reads[MXL_MONITORING_READ_TOO_LATE]; }          },
+        {"permission_denied", [](auto const& s) { return s.reads[MXL_MONITORING_READ_PERMISSION_DENIED]; } },
+        {"read_error",        [](auto const& s) { return s.reads[MXL_MONITORING_READ_ERROR]; }             },
+        {"invalid_essence",   [](auto const& s) { return s.reads[MXL_MONITORING_READ_INVALID_ESSENCE]; }   },
+    };
+
     constexpr Key WriteResults[] = {
-        {"ok",               [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_OK]; }                },
-        {"input_late",       [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_INPUT_LATE]; }        },
-        {"invalid_input",    [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_INVALID_INPUT]; }     },
-        {"permission_error", [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_PERMISSION_DENIED]; } },
-        {"out_of_space",     [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_OUT_OF_SPACE]; }      },
-        {"other_error",      [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_ERROR]; }             },
+        {"ok",                [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_OK]; }                },
+        {"input_late",        [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_INPUT_LATE]; }        },
+        {"invalid_input",     [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_INVALID_INPUT]; }     },
+        {"permission_denied", [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_PERMISSION_DENIED]; } },
+        {"out_of_space",      [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_OUT_OF_SPACE]; }      },
+        {"write_error",       [](auto const& s) { return s.writes[MXL_MONITORING_WRITE_ERROR]; }             },
     };
 
-    constexpr Key InputIssues[] = {
-        {"wrong_format",     [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_WRONG_FORMAT]; }     },
-        {"wrong_resolution", [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_WRONG_RESOLUTION]; } },
-        {"wrong_rate",       [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_WRONG_RATE]; }       },
-        {"wrong_size",       [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_WRONG_SIZE]; }       },
-        {"missing",          [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_MISSING]; }          },
-        {"invalid",          [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_INVALID]; }          },
-        {"incomplete",       [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_INCOMPLETE]; }       },
-        {"illegal_values",   [](auto const& s) { return s.content[MXL_MONITORING_CONTENT_ILLEGAL_VALUES]; }   },
+    constexpr Key EssenceIssues[] = {
+        {"wrong_format",     [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_WRONG_FORMAT]; }     },
+        {"wrong_resolution", [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_WRONG_RESOLUTION]; } },
+        {"wrong_rate",       [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_WRONG_RATE]; }       },
+        {"wrong_size",       [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_WRONG_SIZE]; }       },
+        {"missing",          [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_MISSING]; }          },
+        {"invalid",          [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_INVALID]; }          },
+        {"incomplete",       [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_INCOMPLETE]; }       },
+        {"illegal_values",   [](auto const& s) { return s.essence[MXL_MONITORING_ESSENCE_ILLEGAL_VALUES]; }   },
     };
 
-    constexpr Key OpenFailures[] = {
+    constexpr Key ReaderOpenFailures[] = {
         {"domain",     [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE]; }  },
         {"not_found",  [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_FLOW_NOT_FOUND]; }      },
         {"permission", [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_PERMISSION_DENIED]; }   },
         {"other",
          [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_FLOW_INVALID] + s.accessFailures[MXL_MONITORING_ACCESS_OTHER]; }},
+    };
+
+    constexpr Key OpenFailures[] = {
+        {"domain_unavailable", [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_DOMAIN_UNAVAILABLE]; } },
+        {"flow_not_found",     [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_FLOW_NOT_FOUND]; }     },
+        {"permission_denied",  [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_PERMISSION_DENIED]; }  },
+        {"flow_invalid",       [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_FLOW_INVALID]; }       },
+        {"other",              [](auto const& s) { return s.accessFailures[MXL_MONITORING_ACCESS_OTHER]; }              },
     };
 
     struct Single
@@ -120,23 +139,24 @@ namespace
     };
 
     constexpr Single Singles[] = {
-        {"skipped_total", "Grains or samples jumped over to reach the head again after the ring overtook the reader.",
-         [](auto const& s) { return s.skipped; }, true                                                                       },
-        {"stalls_total",  "Read timeouts that passed with no read at all.",                                            [](auto const& s) { return s.stalls; },
-         true                                                                                                                },
-        {"opens_total",   "Times the flow was opened.",                                                                [](auto const& s) { return s.opens; },
-         false                                                                                                               },
-        {"lost_total",    "Times an open flow went away and was reopened.",                                            [](auto const& s) { return s.losses; },
-         false                                                                                                               },
+        {"skipped_total",       "Grains or samples jumped over to reach the head again after the ring overtook the reader.",
+         [](auto const& s) { return s.skipped; },      true },
+        {"stalls_total",        "Read timeouts that passed with no read at all.",
+         [](auto const& s) { return s.stalls; },       true },
+        {"opens_total",         "Times the flow was opened.",
+         [](auto const& s) { return s.opens; },        false},
+        {"access_losses_total", "Times an open flow went away.",
+         [](auto const& s) { return s.accessLosses; }, false},
     };
 
     class Renderer
     {
     public:
-        Renderer(std::vector<mxlMonitoringFlowSnapshot const*> flows, char const* prefix, bool reads)
+        Renderer(std::vector<mxlMonitoringFlowSnapshot const*> flows, mxlMonitoringRole role)
             : _flows{std::move(flows)}
-            , _p{prefix}
-            , _reads{reads}
+            , _p{prefix(role)}
+            , _reads{readSide(role)}
+            , _reader{role == MXL_MONITORING_ROLE_READER}
         {}
 
         std::string render()
@@ -146,18 +166,33 @@ namespace
                 [&](auto const& s) { line(std::format("{}_flow_state{{flow=\"{}\",state=\"{}\"}} 1", _p, id(s), mxlMonitoringAccessName(s.access))); });
             family("flow_delivering", _reads ? "1 while reads land within a second." : "1 while commits land within a second.", "gauge",
                 [&](auto const& s) { line(std::format("{}_flow_delivering{{flow=\"{}\"}} {}", _p, id(s), s.delivering ? 1 : 0)); });
-            if (_reads)
+            if (_reader)
             {
                 keyed("reads_total",
-                    "Reads by outcome, in grains (discrete) or samples (continuous); too_early and too_late count events.", "result", ReadResults);
+                    "Reads by outcome, in grains (discrete) or samples (continuous); too_early and too_late count events.", "result", ReaderResults);
+            }
+            else if (_reads)
+            {
+                keyed("reads_total",
+                    "Reads by outcome, in grains (discrete) or samples (continuous); ok and invalid_essence in units, the rest count events.", "result",
+                    ReadResults);
+                keyed("invalid_essence_total", "Grains or samples read that were wrong, by issue.", "issue", EssenceIssues);
             }
             else
             {
-                keyed("writes_total", "Writes by outcome, in grains (discrete) or samples (continuous); permission_error and other_error count events.", "result",
+                keyed("writes_total",
+                    "Writes by outcome, in grains (discrete) or samples (continuous); permission_denied and write_error count events.", "result",
                     WriteResults);
-                keyed("invalid_input_total", "Input found wrong before writing, by issue.", "issue", InputIssues);
+                keyed("invalid_input_total", "Input found wrong before writing, by issue.", "issue", EssenceIssues);
             }
-            keyed("open_failures_total", "Attempts to reach a flow that failed, by reason.", "reason", OpenFailures);
+            if (_reader)
+            {
+                keyed("open_failures_total", "Attempts to reach a flow that failed, by reason.", "reason", ReaderOpenFailures);
+            }
+            else
+            {
+                keyed("open_failures_total", "Attempts to reach a flow that failed, by reason.", "reason", OpenFailures);
+            }
             for (auto const& single : Singles)
             {
                 if (single.readOnly && !_reads)
@@ -263,6 +298,7 @@ namespace
         std::vector<mxlMonitoringFlowSnapshot const*> _flows;
         char const* _p;
         bool _reads;
+        bool _reader;
         std::string _out;
     };
 }
@@ -306,7 +342,7 @@ extern "C"
                 }
                 if (!flows.empty())
                 {
-                    out += Renderer{std::move(flows), prefix(role), readSide(role)}.render();
+                    out += Renderer{std::move(flows), role}.render();
                 }
             }
 

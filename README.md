@@ -7,7 +7,7 @@
 A media function that reads or writes [MXL](https://github.com/dmf-mxl/mxl)
 flows gets a status from every libmxl call and nothing more: no count of how
 often a flow was out of reach, read too early or too late, or written without
-its input in time, and no check that the content is what the flow declares.
+its input in time, and no check that the essence is what the flow declares.
 AMWA's [IN-004](https://specs.amwa.tv/in-004/latest/Overview/) (Flow Connection
 Phase 2 Requirements and Gaps, work in progress) asks for monitoring of MXL
 writers, readers and replication: notification of these errors, counters of
@@ -18,7 +18,7 @@ export them yet.
 
 A process records what happened to each flow it uses: whether the
 domain and the flow could be reached, the outcome of every read or write, and
-whether the content was what it should be. The library counts it, measures
+whether the essence was what it should be. The library counts it, measures
 latency against the grains' media timestamps, turns failures into rate-limited
 events, and exports it all as Prometheus text or over OTLP.
 
@@ -28,12 +28,18 @@ domain has to load identically.
 
 ## What it records
 
-| Outcome | Values |
-| --- | --- |
-| Access to the domain and flow | open, domain unavailable, flow not found, permission denied, flow invalid, other |
-| Reads | ok, too early, too late, permission denied, error, invalid content |
-| Writes | ok, input late, invalid input, permission denied, out of space, error |
-| Content, for reads and writes | wrong format, wrong resolution, wrong rate, wrong size, missing, invalid, incomplete, illegal values |
+| Outcome | Values | IN-004 category |
+| --- | --- | --- |
+| Access to the domain and flow | open, domain unavailable, flow not found, permission denied, flow invalid, other | Access Status |
+| Reads | ok, too early, too late, permission denied, error | Read Status |
+| | invalid essence | Essence Status |
+| Writes | ok, permission denied, out of space, error | Write Status |
+| | input late, invalid input | Essence Status |
+| Essence, for reads and writes | wrong format, wrong resolution, wrong rate, wrong size, missing, invalid, incomplete, illegal values | Essence Status |
+
+Input late, invalid input and invalid essence are reported as write and read
+outcomes, in their place among the results, though IN-004 puts them under
+Essence Status; the essence issues say what was wrong.
 
 Every libmxl status is classified into these by `mxlMonitoringClassify*`. A
 too-early read counts once per index, and only once the index is a grace period
@@ -49,20 +55,21 @@ increments atomics. `DESIGN.md` gives the reasons behind these rules, and
 
 ## Libraries
 
-| Target | Header | Contents |
+| Target | Header | Provides |
 | --- | --- | --- |
 | `mxl-monitoring` | `mxl-monitoring/monitoring.h` | flows, recording, snapshots, events |
-| | `mxl-monitoring/content.h` | flow definitions, expectations, grain and sample checks |
+| | `mxl-monitoring/essence.h` | flow definitions, expectations, grain and sample checks |
 | | `mxl-monitoring/reader.h` | libmxl reader calls that record their own outcome |
 | | `mxl-monitoring/writer.h` | libmxl writer calls that record their own outcome |
-| | `mxl-monitoring/bcp008.h` | the statuses and counters of a flow's AMWA BCP-008 receiver or sender monitor, for the IS-12 implementation of a Node |
+| | `mxl-monitoring/bcp008.h` | the statuses and counters of a flow's AMWA BCP-008-01 receiver monitor or BCP-008-02 sender monitor, for the IS-12 implementation of a Node |
 | `mxl-monitoring-prometheus` | `mxl-monitoring/prometheus.h` | text exposition for `/metrics` |
 | `mxl-monitoring-http` | `mxl-monitoring/http.h` | an endpoint serving `/metrics` and `/healthz`, for a process without an HTTP server |
 | `mxl-monitoring-otlp` | `mxl-monitoring/otlp.h` | metrics and events pushed over OTLP/HTTP to an OpenTelemetry Collector; built with `-DMXL_MONITORING_OTLP=ON` |
 
 In Prometheus text, readers are exported under `mxl_reader_*`, with the names
-and label values `mxl-reader` serves; writers under `mxl_writer_*`;
-replication under `mxl_gateway_source_*` and `mxl_gateway_target_*`. Over
+and label values `mxl-reader` serves but for `access_losses_total`; writers
+under `mxl_writer_*`; replication under `mxl_replication_source_*` and
+`mxl_replication_target_*`, all three with the label values of OTLP. Over
 OTLP, readers and writers are exported under the `mxl.*` names of
 [DESIGN.md](DESIGN.md#opentelemetry), replication not yet.
 
@@ -70,7 +77,7 @@ OTLP, readers and writers are exported under the `mxl.*` names of
 
 [docs/hello-world.md](docs/hello-world.md) builds and runs a first reader, and
 [docs/tutorial.md](docs/tutorial.md) a writer and a reader through access
-failures, events and content checks; their programs are in
+failures, events and essence checks; their programs are in
 [examples/](examples/). [mxl-reader](https://github.com/marquies/dmf-mf-mxl-reader)
 is a complete media function built on the library. In short:
 
@@ -189,12 +196,12 @@ Released:
 
 | Version | What it added |
 | --- | --- |
-| 0.1 | the core model, the reader wrappers, the content checks and the Prometheus text |
+| 0.1 | the core model, the reader wrappers, the essence checks and the Prometheus text |
 | 0.2 | a flow handle reported under a name of its own, so a reader slot keeps its counts while the flow it reads changes |
 | 0.3 | the writer wrappers, and `/metrics` and `/healthz` for a process without an HTTP server |
 | 0.4 | the OTLP/HTTP exporter: metrics and the events as log records |
-| 0.5 | the Go binding, names for every outcome and content issue, and latency buckets up to 81.92 s |
-| 0.6 | AMWA BCP-008 statuses and counters for a flow, judged from two snapshots, for the monitors an IS-12 Node holds |
+| 0.5 | the Go binding, names for every outcome and essence issue, and latency buckets up to 81.92 s |
+| 0.6 | AMWA BCP-008-01 and BCP-008-02 statuses and counters for a flow, judged from two snapshots, for the monitors an IS-12 Node holds |
 
 Planned, in no fixed order:
 
@@ -204,6 +211,9 @@ Planned, in no fixed order:
   renders them with their read and write outcomes. Planned are the outcomes of
   the copy itself, which a gateway records around its own copy of a flow since
   no wrapper applies, and their export under `mxl.replication.*` over OTLP.
+- **Jitter**: IN-004 asks media functions to measure latency and jitter. The
+  library measures latency against the media timestamps; jitter is not
+  measured, and IN-004 has yet to define a common method of calculating it.
 - **Go events**: subscribing to events from Go. The Go binding records,
   snapshots and exports; events reach a collector only through the OTLP
   exporter.

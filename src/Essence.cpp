@@ -40,23 +40,23 @@ namespace mxl::monitoring
             return std::format("{}/{}", rate.numerator, rate.denominator);
         }
 
-        constexpr std::uint32_t bit(mxlMonitoringContent issue)
+        constexpr std::uint32_t bit(mxlMonitoringEssence issue)
         {
             return 1U << issue;
         }
 
         // The worst issue a mismatch stands for, when a grain or batch is
         // counted against it.
-        mxlMonitoringContent mismatchIssue(std::uint32_t mismatch)
+        mxlMonitoringEssence mismatchIssue(std::uint32_t mismatch)
         {
-            for (auto const issue : {MXL_MONITORING_CONTENT_WRONG_FORMAT, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, MXL_MONITORING_CONTENT_WRONG_RATE})
+            for (auto const issue : {MXL_MONITORING_ESSENCE_WRONG_FORMAT, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, MXL_MONITORING_ESSENCE_WRONG_RATE})
             {
                 if ((mismatch & bit(issue)) != 0)
                 {
                     return issue;
                 }
             }
-            return MXL_MONITORING_CONTENT_WRONG_FORMAT;
+            return MXL_MONITORING_ESSENCE_WRONG_FORMAT;
         }
 
         // A v210 row packs six pixels into four 32-bit words of three 10-bit
@@ -130,7 +130,7 @@ namespace mxl::monitoring
             return {};
         }
 
-        bool found(mxlMonitoringContent what, mxlMonitoringContent* issue)
+        bool found(mxlMonitoringEssence what, mxlMonitoringEssence* issue)
         {
             if (issue != nullptr)
             {
@@ -212,27 +212,27 @@ extern "C"
         auto parts = std::vector<std::string>{};
         if (e.mediaType != nullptr && *e.mediaType != '\0' && std::string_view{e.mediaType} != d.mediaType)
         {
-            bits |= bit(MXL_MONITORING_CONTENT_WRONG_FORMAT);
+            bits |= bit(MXL_MONITORING_ESSENCE_WRONG_FORMAT);
             parts.push_back(std::format("media type {} where {} was expected", d.mediaType, e.mediaType));
         }
         if ((e.width != 0 && e.width != d.width) || (e.height != 0 && e.height != d.height))
         {
-            bits |= bit(MXL_MONITORING_CONTENT_WRONG_RESOLUTION);
+            bits |= bit(MXL_MONITORING_ESSENCE_WRONG_RESOLUTION);
             parts.push_back(std::format("{}x{} where {}x{} was expected", d.width, d.height, e.width, e.height));
         }
         if (!unset(e.rate) && (unset(d.rate) || !sameRate(e.rate, d.rate)))
         {
-            bits |= bit(MXL_MONITORING_CONTENT_WRONG_RATE);
+            bits |= bit(MXL_MONITORING_ESSENCE_WRONG_RATE);
             parts.push_back(std::format("rate {} where {} was expected", rateText(d.rate), rateText(e.rate)));
         }
         if (e.sampleRate != 0 && e.sampleRate != d.sampleRate)
         {
-            bits |= bit(MXL_MONITORING_CONTENT_WRONG_RATE);
+            bits |= bit(MXL_MONITORING_ESSENCE_WRONG_RATE);
             parts.push_back(std::format("sample rate {} where {} was expected", d.sampleRate, e.sampleRate));
         }
         if (e.channels != 0 && e.channels != d.channels)
         {
-            bits |= bit(MXL_MONITORING_CONTENT_WRONG_FORMAT);
+            bits |= bit(MXL_MONITORING_ESSENCE_WRONG_FORMAT);
             parts.push_back(std::format("{} channels where {} were expected", d.channels, e.channels));
         }
         auto joined = std::string{};
@@ -245,7 +245,7 @@ extern "C"
     }
 
     bool mxlMonitoringCheckGrain(mxlMonitoringDeclared const* declared, uint32_t mismatch, bool checkLegal, mxlGrainInfo const* grain,
-        uint64_t index, uint8_t const* payload, mxlMonitoringContent* issue, char* detail, size_t detailSize)
+        uint64_t index, uint8_t const* payload, mxlMonitoringEssence* issue, char* detail, size_t detailSize)
     {
         copyText("", detail, detailSize);
         if (mismatch != 0)
@@ -262,15 +262,15 @@ extern "C"
         // cycle's grain.
         if (grain->index != index)
         {
-            return found(MXL_MONITORING_CONTENT_MISSING, issue);
+            return found(MXL_MONITORING_ESSENCE_MISSING, issue);
         }
         if ((grain->flags & MXL_GRAIN_FLAG_INVALID) != 0)
         {
-            return found(MXL_MONITORING_CONTENT_INVALID, issue);
+            return found(MXL_MONITORING_ESSENCE_INVALID, issue);
         }
         if (grain->validSlices < grain->totalSlices)
         {
-            return found(MXL_MONITORING_CONTENT_INCOMPLETE, issue);
+            return found(MXL_MONITORING_ESSENCE_INCOMPLETE, issue);
         }
         if (declared == nullptr)
         {
@@ -279,21 +279,21 @@ extern "C"
         auto const v210 = std::string_view{declared->mediaType} == "video/v210" && declared->width > 0 && v210Rows(*declared) > 0;
         if (v210 && grain->grainSize != v210RowBytes(declared->width) * static_cast<std::uint64_t>(v210Rows(*declared)))
         {
-            return found(MXL_MONITORING_CONTENT_WRONG_SIZE, issue);
+            return found(MXL_MONITORING_ESSENCE_WRONG_SIZE, issue);
         }
         if (v210 && checkLegal && payload != nullptr)
         {
             if (auto const where = v210RowsIllegal(payload, declared->width, v210Rows(*declared)); !where.empty())
             {
                 copyText(where, detail, detailSize);
-                return found(MXL_MONITORING_CONTENT_ILLEGAL_VALUES, issue);
+                return found(MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, issue);
             }
         }
         return false;
     }
 
     bool mxlMonitoringCheckSamples(mxlMonitoringDeclared const* declared, uint32_t mismatch, bool checkLegal,
-        mxlWrappedMultiBufferSlice const* samples, mxlMonitoringContent* issue, char* detail, size_t detailSize)
+        mxlWrappedMultiBufferSlice const* samples, mxlMonitoringEssence* issue, char* detail, size_t detailSize)
     {
         copyText("", detail, detailSize);
         if (mismatch != 0)
@@ -305,7 +305,7 @@ extern "C"
             if (auto const where = float32Illegal(*samples); !where.empty())
             {
                 copyText(where, detail, detailSize);
-                return found(MXL_MONITORING_CONTENT_ILLEGAL_VALUES, issue);
+                return found(MXL_MONITORING_ESSENCE_ILLEGAL_VALUES, issue);
             }
         }
         return false;

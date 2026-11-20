@@ -63,9 +63,9 @@ mxl_reader_stalls_total{flow="d4d00000-0000-0000-0000-000000000001"} 0
 # HELP mxl_reader_opens_total Times the flow was opened.
 # TYPE mxl_reader_opens_total counter
 mxl_reader_opens_total{flow="d4d00000-0000-0000-0000-000000000001"} 2
-# HELP mxl_reader_lost_total Times an open flow went away and was reopened.
-# TYPE mxl_reader_lost_total counter
-mxl_reader_lost_total{flow="d4d00000-0000-0000-0000-000000000001"} 0
+# HELP mxl_reader_access_losses_total Times an open flow went away.
+# TYPE mxl_reader_access_losses_total counter
+mxl_reader_access_losses_total{flow="d4d00000-0000-0000-0000-000000000001"} 0
 # HELP mxl_reader_age_seconds Wall clock minus the media timestamp of the last read.
 # TYPE mxl_reader_age_seconds gauge
 mxl_reader_age_seconds{flow="d4d00000-0000-0000-0000-000000000001"} 0.003000
@@ -80,9 +80,9 @@ TEST_CASE("A reader's exposition is mxl-reader's, followed by its latencies", "[
     mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
     auto const index = context.dueIndex();
     context.now += 3 * Ms;
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_MISSING, index - 1, 1);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_WRONG_RATE, index - 1, 1);
-    mxlMonitoringRecordReadContent(flow, MXL_MONITORING_CONTENT_WRONG_RESOLUTION, index - 1, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_MISSING, index - 1, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RATE, index - 1, 1);
+    mxlMonitoringRecordReadEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RESOLUTION, index - 1, 1);
     mxlMonitoringRecordRead(flow, MXL_STATUS_OK, index, 1);
     mxlMonitoringRecordRead(flow, MXL_ERR_OUT_OF_RANGE_TOO_LATE, index + 1, 1);
     mxlMonitoringRecordSkipped(flow, 4);
@@ -118,13 +118,16 @@ TEST_CASE("A flow not yet opened has a state but no info or age", "[prometheus]"
     CHECK(contains(text, "mxl_reader_open_failures_total{flow=\"" + id + "\",reason=\"not_found\"} 1"));
 }
 
-TEST_CASE("A writer's exposition counts writes, by outcome and by input issue", "[prometheus]")
+TEST_CASE("A writer's exposition counts writes, by outcome and by input issue, under the OTLP names", "[prometheus]")
 {
     auto context = Context{};
     auto const flow = context.open(MXL_MONITORING_ROLE_WRITER);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_FLOW_INVALID, MXL_ERR_FLOW_INVALID);
+    mxlMonitoringRecordAccess(flow, MXL_MONITORING_ACCESS_OPEN, MXL_STATUS_OK);
+    mxlMonitoringRecordWrite(flow, MXL_ERR_PERMISSION_DENIED, context.dueIndex(), 1);
     mxlMonitoringRecordWrite(flow, MXL_STATUS_OK, context.dueIndex(), 1);
     mxlMonitoringRecordWriteOutcome(flow, MXL_MONITORING_WRITE_INPUT_LATE, MXL_STATUS_OK, 1, 3);
-    mxlMonitoringRecordWriteContent(flow, MXL_MONITORING_CONTENT_WRONG_RATE, 2, 1);
+    mxlMonitoringRecordWriteEssence(flow, MXL_MONITORING_ESSENCE_WRONG_RATE, 2, 1);
 
     auto const text = render(context.monitoring);
     auto const id = std::string{FlowId};
@@ -132,20 +135,38 @@ TEST_CASE("A writer's exposition counts writes, by outcome and by input issue", 
     CHECK(contains(text, "mxl_writer_writes_total{flow=\"" + id + "\",result=\"input_late\"} 3"));
     CHECK(contains(text, "mxl_writer_writes_total{flow=\"" + id + "\",result=\"invalid_input\"} 1"));
     CHECK(contains(text, "mxl_writer_invalid_input_total{flow=\"" + id + "\",issue=\"wrong_rate\"} 1"));
+    INFO("only the reader keeps mxl-reader's names; a writer has none to keep");
+    CHECK(contains(text, "mxl_writer_writes_total{flow=\"" + id + "\",result=\"permission_denied\"} 1"));
+    CHECK(contains(text, "mxl_writer_writes_total{flow=\"" + id + "\",result=\"write_error\"} 0"));
+    CHECK(contains(text, "mxl_writer_open_failures_total{flow=\"" + id + "\",reason=\"flow_invalid\"} 1"));
+    CHECK(contains(text, "mxl_writer_open_failures_total{flow=\"" + id + "\",reason=\"other\"} 0"));
+    CHECK(text.find("permission_error") == std::string::npos);
+    CHECK(text.find("other_error") == std::string::npos);
+    CHECK(text.find("reason=\"domain\"") == std::string::npos);
     CHECK(contains(text, "mxl_writer_commit_seconds_count{flow=\"" + id + "\"} 1"));
     CHECK(text.find("mxl_writer_reads_total") == std::string::npos);
     CHECK(text.find("mxl_writer_stalls_total") == std::string::npos);
     CHECK(text.find("mxl_reader") == std::string::npos);
 }
 
-TEST_CASE("Replication flows carry the gateway prefixes", "[prometheus]")
+TEST_CASE("Replication flows carry the replication prefixes and the OTLP names", "[prometheus]")
 {
     auto context = Context{};
-    context.open(MXL_MONITORING_ROLE_REPLICATION_SOURCE);
-    context.open(MXL_MONITORING_ROLE_REPLICATION_TARGET);
+    auto const source = context.open(MXL_MONITORING_ROLE_REPLICATION_SOURCE);
+    mxlMonitoringRecordReadEssence(source, MXL_MONITORING_ESSENCE_WRONG_RATE, context.dueIndex(), 2);
+    mxlMonitoringRecordRead(source, MXL_ERR_UNKNOWN, context.dueIndex(), 1);
+    context.open(MXL_MONITORING_ROLE_REPLICATION_TARGET, "d4d00000-0000-0000-0000-000000000002");
     auto const text = render(context.monitoring);
-    CHECK(text.find("mxl_gateway_source_reads_total{") != std::string::npos);
-    CHECK(text.find("mxl_gateway_target_writes_total{") != std::string::npos);
+    INFO(text);
+    auto const id = std::string{FlowId};
+    CHECK(text.find("mxl_replication_target_writes_total{") != std::string::npos);
+    CHECK(text.find("mxl_gateway") == std::string::npos);
+    INFO("a source counts invalid essence as one result and says why per issue, as a writer does for its input");
+    CHECK(contains(text, "mxl_replication_source_reads_total{flow=\"" + id + "\",result=\"invalid_essence\"} 2"));
+    CHECK(contains(text, "mxl_replication_source_reads_total{flow=\"" + id + "\",result=\"read_error\"} 1"));
+    CHECK(contains(text, "mxl_replication_source_invalid_essence_total{flow=\"" + id + "\",issue=\"wrong_rate\"} 2"));
+    CHECK(contains(text, "mxl_replication_source_open_failures_total{flow=\"" + id + "\",reason=\"domain_unavailable\"} 0"));
+    CHECK(text.find("result=\"wrong_rate\"") == std::string::npos);
 }
 
 TEST_CASE("A flow id is escaped and a media type cleaned, so neither breaks a label", "[prometheus]")

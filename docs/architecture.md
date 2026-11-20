@@ -13,7 +13,7 @@ Collector receive.
 ## The idea in one paragraph
 
 A process that reads or writes MXL flows records what happened to each flow:
-could it be reached, did the read or write succeed, was the content right.
+could it be reached, did the read or write succeed, was the essence right.
 The library counts those outcomes into per-flow atomics, turns changes into
 rate-limited events, and renders everything for Prometheus or OTLP. Recording
 never blocks, so it may run inside a media loop; everything with history or
@@ -24,9 +24,9 @@ I/O runs elsewhere.
 | Component | Library | Headers / sources |
 | --- | --- | --- |
 | Core model: flows, counters, snapshots, events | `mxl-monitoring` | `monitoring.h`, `Monitoring.cpp`, `Flow.hpp`, `Events.cpp` |
-| Content checks against the flow definition | `mxl-monitoring` | `content.h`, `Content.cpp` |
+| Essence checks against the flow definition | `mxl-monitoring` | `essence.h`, `Essence.cpp` |
 | libmxl wrappers that record their own outcome | `mxl-monitoring` | `reader.h`/`Reader.cpp`, `writer.h`/`Writer.cpp` |
-| BCP-008 monitor statuses and counters from snapshots | `mxl-monitoring` | `bcp008.h`, `Bcp008.cpp` |
+| BCP-008-01 receiver and BCP-008-02 sender monitor statuses and counters from snapshots | `mxl-monitoring` | `bcp008.h`, `Bcp008.cpp` |
 | Prometheus text exposition | `mxl-monitoring-prometheus` | `prometheus.h`, `Prometheus.cpp` |
 | Minimal `/metrics` + `/healthz` endpoint | `mxl-monitoring-http` | `http.h`, `Http.cpp` |
 | OTLP/HTTP push exporter (optional) | `mxl-monitoring-otlp` | `otlp.h`, `Otlp.cpp` |
@@ -43,7 +43,7 @@ it carry them.
 - A handle exists before the flow is opened, so failures to reach the flow
   have somewhere to be counted. `mxlMonitoringSetFlowTarget` can point it at
   another libmxl flow while keeping its name and counts.
-- Per flow: access state, read/write/content counters, skipped and stall
+- Per flow: access state, read/write/essence counters, skipped and stall
   counts, three latency histograms (arrival, commit, input), the last error,
   and whether the flow is delivering.
 
