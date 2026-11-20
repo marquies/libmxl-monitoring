@@ -450,7 +450,7 @@ counts stay as they are, so `ok` keeps meaning a grain written from input.
 BCP-008-01 and BCP-008-02 report a change to a less healthy status at once, and a change to a
 healthier one only once it has held for `statusReportingDelay`, 3 s by
 default. The core applies the same rule to the health it exports, with
-`healthDelayNs` in the configuration, 0 meaning 3 s, so a dashboard sees what
+`statusReportingDelayNs` in the configuration, 0 meaning 3 s, so a dashboard sees what
 a controller sees. `mxlMonitoringBcp008GetStatuses` stays undelayed: the
 Node holds the monitor object and applies the delay itself, and a second
 delay would double it.
